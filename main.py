@@ -50,47 +50,412 @@ def user_lookup_callback(_jwt_header, jwt_data):
     identity = jwt_data["sub"]
     return {"id": identity, "email": "dede@risktravel.com"}
 
-# Sample data for the platform
-REVENUE_STREAMS = [
+# AI Empire Data Structures
+
+# Comprehensive AI Empire Agent Ecosystem
+AI_EMPIRE_AGENTS = [
+    # Tier 1: Revenue Generation Agents
     {
         "id": 1,
-        "name": "Consulting Services",
-        "current_month": 45000,
-        "target_month": 50000,
-        "ytd": 480000,
-        "target_ytd": 600000,
-        "growth_rate": 12.5,
-        "last_updated": datetime.now().isoformat()
+        "name": "Speaking Opportunity Hunter Agent",
+        "tier": "revenue_generation",
+        "function": "Auto-research, apply to, and book 20+ speaking opportunities weekly",
+        "tools": ["Apollo", "LinkedIn Sales Navigator", "Perplexity", "TEDx credentials"],
+        "status": "active",
+        "performance": {
+            "opportunities_found": 23,
+            "applications_submitted": 18,
+            "bookings_confirmed": 3,
+            "pipeline_value": 175000,
+            "success_rate": 87.2
+        },
+        "last_activity": datetime.now().isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=2)).isoformat(),
+        "revenue_target": "25K-200K per engagement",
+        "weekly_goal": "20+ speaking opportunities"
     },
     {
         "id": 2,
-        "name": "Digital Products",
-        "current_month": 28000,
-        "target_month": 35000,
-        "ytd": 320000,
-        "target_ytd": 420000,
-        "growth_rate": 8.3,
-        "last_updated": datetime.now().isoformat()
+        "name": "Enterprise Lead Generator Agent",
+        "tier": "revenue_generation",
+        "function": "Identify and qualify enterprises struggling with AI governance",
+        "tools": ["Apollo", "LinkedIn Sales Navigator", "Perplexity research"],
+        "status": "active",
+        "performance": {
+            "leads_identified": 547,
+            "leads_qualified": 89,
+            "meetings_booked": 12,
+            "pipeline_value": 2500000,
+            "success_rate": 16.3
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=15)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=1)).isoformat(),
+        "targets": ["Chief Risk Officers", "Chief AI Officers", "Board Members"],
+        "weekly_goal": "500+ qualified enterprise leads"
     },
     {
         "id": 3,
-        "name": "Training Programs",
-        "current_month": 15000,
-        "target_month": 20000,
-        "ytd": 180000,
-        "target_ytd": 240000,
-        "growth_rate": 15.2,
-        "last_updated": datetime.now().isoformat()
+        "name": "AI Governance Consultant Agent",
+        "tier": "revenue_generation",
+        "function": "Automated consulting proposal generation and project delivery",
+        "tools": ["Perplexity", "Custom frameworks", "Automated reporting"],
+        "status": "active",
+        "performance": {
+            "proposals_generated": 15,
+            "proposals_won": 4,
+            "active_projects": 7,
+            "monthly_retainers": 3,
+            "success_rate": 26.7
+        },
+        "last_activity": (datetime.now() - timedelta(hours=1)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=3)).isoformat(),
+        "services": ["Risk assessments", "Governance frameworks", "Compliance audits"],
+        "pricing": "50K-500K per engagement, 25K-100K monthly retainers"
     },
     {
         "id": 4,
-        "name": "Partnerships",
-        "current_month": 12000,
-        "target_month": 15000,
-        "ytd": 144000,
-        "target_ytd": 180000,
-        "growth_rate": 6.7,
-        "last_updated": datetime.now().isoformat()
+        "name": "Digital Clone Executive",
+        "tier": "revenue_generation",
+        "function": "Handle 70% of client interactions, calls, and presentations",
+        "tools": ["Mindstudio", "Voice/video training", "Knowledge base"],
+        "status": "active",
+        "performance": {
+            "interactions_handled": 156,
+            "client_satisfaction": 94.2,
+            "escalations_required": 8,
+            "time_saved_hours": 78,
+            "success_rate": 94.9
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=5)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(minutes=30)).isoformat(),
+        "capabilities": ["FAQ responses", "Initial consultations", "Workshop delivery"],
+        "coverage": "70% of client interactions"
+    },
+    # Tier 2: Authority Building Agents
+    {
+        "id": 5,
+        "name": "Content Authority Engine",
+        "tier": "authority_building",
+        "function": "Transform TEDx content into multi-platform thought leadership",
+        "tools": ["Perplexity", "Manus", "Mindstudio", "Content calendar"],
+        "status": "active",
+        "performance": {
+            "posts_published": 45,
+            "videos_created": 12,
+            "podcast_content": 8,
+            "engagement_rate": 12.8,
+            "success_rate": 89.3
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=45)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=4)).isoformat(),
+        "output": "Daily LinkedIn posts, weekly YouTube videos, podcast content",
+        "goal": "25K+ LinkedIn followers, 10K+ YouTube subscribers within 90 days"
+    },
+    {
+        "id": 6,
+        "name": "LinkedIn Growth Accelerator",
+        "tier": "authority_building",
+        "function": "Systematic networking with 1,000+ AI/GRC executives weekly",
+        "tools": ["LinkedIn Sales Navigator", "Klenty SDRx", "Engagement automation"],
+        "status": "active",
+        "performance": {
+            "connections_made": 1247,
+            "engagement_actions": 2856,
+            "response_rate": 23.4,
+            "follower_growth": 2890,
+            "success_rate": 76.8
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=10)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=2)).isoformat(),
+        "strategy": "Strategic commenting, connection requests, relationship building",
+        "target": "50K+ followers, 10%+ engagement rate"
+    },
+    {
+        "id": 7,
+        "name": "YouTube Channel Manager",
+        "tier": "authority_building",
+        "function": "Automated video creation, editing, and optimization",
+        "tools": ["Automated editing", "SEO optimization", "Community management"],
+        "status": "active",
+        "performance": {
+            "videos_published": 16,
+            "total_views": 45670,
+            "subscribers": 3247,
+            "watch_time_hours": 1890,
+            "success_rate": 82.1
+        },
+        "last_activity": (datetime.now() - timedelta(hours=2)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=6)).isoformat(),
+        "content": ["TEDx clips", "Expert commentary", "Workshop excerpts"],
+        "monetization": "Ad revenue, sponsorships, lead generation"
+    },
+    {
+        "id": 8,
+        "name": "Podcast Booking Agent",
+        "tier": "authority_building",
+        "function": "Secure 10+ podcast appearances monthly",
+        "tools": ["Apollo", "Research automation", "Pitch templates"],
+        "status": "active",
+        "performance": {
+            "pitches_sent": 32,
+            "bookings_confirmed": 11,
+            "appearances_completed": 8,
+            "reach_estimate": 67500,
+            "success_rate": 34.4
+        },
+        "last_activity": (datetime.now() - timedelta(hours=1)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=4)).isoformat(),
+        "targets": "Top AI, business, and accessibility podcasts",
+        "revenue": "2K-10K per paid appearance + authority building"
+    },
+    # Tier 3: Platform Development Agents
+    {
+        "id": 9,
+        "name": "AI Risk Assessment Engine",
+        "tier": "platform_development",
+        "function": "Automated enterprise AI usage discovery and risk scoring",
+        "tools": ["GitHub Spark AI", "Custom algorithms", "Integration APIs"],
+        "status": "development",
+        "performance": {
+            "assessments_completed": 23,
+            "risk_scores_generated": 156,
+            "compliance_gaps_found": 78,
+            "client_subscriptions": 12,
+            "success_rate": 91.3
+        },
+        "last_activity": (datetime.now() - timedelta(hours=3)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=8)).isoformat(),
+        "capability": "Real-time AI inventory, risk analysis, compliance monitoring",
+        "revenue": "2K-100K/month SaaS subscriptions"
+    },
+    {
+        "id": 10,
+        "name": "Governance Framework Generator",
+        "tier": "platform_development",
+        "function": "Custom AI governance policies and procedures",
+        "tools": ["Perplexity", "Legal research", "Template automation"],
+        "status": "active",
+        "performance": {
+            "frameworks_generated": 15,
+            "frameworks_licensed": 7,
+            "industries_covered": 12,
+            "compliance_rate": 98.7,
+            "success_rate": 87.5
+        },
+        "last_activity": (datetime.now() - timedelta(hours=4)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=12)).isoformat(),
+        "output": "Industry-specific compliance frameworks",
+        "licensing": "25K-100K per enterprise framework"
+    },
+    {
+        "id": 11,
+        "name": "Accessibility Travel Platform",
+        "tier": "platform_development",
+        "function": "AI-powered accessible travel assessment and planning",
+        "tools": ["Custom APIs", "Research automation", "Venue databases"],
+        "status": "beta",
+        "performance": {
+            "assessments_completed": 8,
+            "venues_evaluated": 245,
+            "accessibility_scores": 189,
+            "bookings_assisted": 12,
+            "success_rate": 93.8
+        },
+        "last_activity": (datetime.now() - timedelta(hours=6)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=24)).isoformat(),
+        "services": ["Destination assessments", "Accommodation evaluations"],
+        "revenue": "25K-75K per assessment project"
+    }
+]
+
+# Enhanced Health & Wellness Management
+HEALTH_WELLNESS = {
+    "energy_tracking": [
+        {
+            "id": 1,
+            "date": datetime.now().isoformat(),
+            "energy_level": 8,
+            "focus_level": 7,
+            "stress_level": 3,
+            "sleep_hours": 7.5,
+            "recovery_time": 2.5,
+            "notes": "Great energy after morning meditation"
+        },
+        {
+            "id": 2,
+            "date": (datetime.now() - timedelta(days=1)).isoformat(),
+            "energy_level": 6,
+            "focus_level": 5,
+            "stress_level": 6,
+            "sleep_hours": 6.0,
+            "recovery_time": 3.0,
+            "notes": "Needed extra recovery time after client calls"
+        }
+    ],
+    "wellness_goals": [
+        {"id": 1, "goal": "Daily energy level > 7", "current": 8, "target": 7, "status": "achieved"},
+        {"id": 2, "goal": "Stress level < 4", "current": 3, "target": 4, "status": "achieved"},
+        {"id": 3, "goal": "Sleep 7+ hours", "current": 7.5, "target": 7.0, "status": "achieved"},
+        {"id": 4, "goal": "Recovery time < 3 hours", "current": 2.5, "target": 3.0, "status": "achieved"}
+    ],
+    "alerts": [
+        {"id": 1, "type": "stress", "message": "Stress levels elevated - consider break", "active": False},
+        {"id": 2, "type": "energy", "message": "Energy optimal for high-value tasks", "active": True},
+        {"id": 3, "type": "recovery", "message": "Recovery time within healthy range", "active": True}
+    ]
+}
+
+# AI GRC Executive Job Search & Board Positions
+EXECUTIVE_OPPORTUNITIES = [
+    {
+        "id": 1,
+        "type": "executive_position",
+        "title": "Chief AI Officer",
+        "company": "Fortune 500 Financial Services",
+        "compensation": "$450K-650K + equity",
+        "location": "New York, NY / Remote",
+        "status": "interview_stage",
+        "match_score": 94,
+        "requirements": ["AI governance expertise", "TEDx speaking", "Financial services exp"],
+        "application_date": "2025-09-10",
+        "next_step": "Final interview with Board",
+        "notes": "Strong cultural fit, impressed with TEDx background"
+    },
+    {
+        "id": 2,
+        "type": "board_director",
+        "title": "Independent Board Director",
+        "company": "AI Healthcare Startup",
+        "compensation": "$75K cash + equity package",
+        "location": "San Francisco, CA",
+        "status": "under_consideration",
+        "match_score": 87,
+        "requirements": ["AI governance", "Healthcare knowledge", "Risk management"],
+        "application_date": "2025-09-08",
+        "next_step": "Background check and references",
+        "notes": "Seeking expertise in AI ethics and accessibility"
+    },
+    {
+        "id": 3,
+        "type": "board_advisor",
+        "title": "Strategic Advisor - AI Governance",
+        "company": "Enterprise SaaS Platform",
+        "compensation": "$25K + equity options",
+        "location": "Remote",
+        "status": "offer_received",
+        "match_score": 91,
+        "requirements": ["Enterprise AI experience", "Governance frameworks", "Speaking ability"],
+        "application_date": "2025-09-05",
+        "next_step": "Contract negotiation",
+        "notes": "Perfect alignment with platform expertise"
+    }
+]
+
+# Rest as Resistance Retreat Luxury Events
+RETREAT_EVENTS = [
+    {
+        "id": 1,
+        "name": "AI Leaders Wellness Retreat",
+        "type": "luxury_executive_retreat",
+        "dates": "2025-11-15 to 2025-11-18",
+        "location": "Napa Valley, CA",
+        "capacity": 25,
+        "registered": 18,
+        "pricing": "$12,500 per person",
+        "status": "registration_open",
+        "focus": ["Executive wellness", "AI governance", "Sustainable leadership"],
+        "amenities": ["Spa treatments", "Gourmet dining", "Private vineyard access"],
+        "speakers": ["Dr. Dédé", "Mindfulness expert", "Executive chef"],
+        "revenue_projected": 312500
+    },
+    {
+        "id": 2,
+        "name": "Accessibility & Innovation Summit",
+        "type": "curated_conference",
+        "dates": "2025-12-08 to 2025-12-10",
+        "location": "Miami Beach, FL",
+        "capacity": 150,
+        "registered": 89,
+        "pricing": "$3,500 per person",
+        "status": "early_bird_pricing",
+        "focus": ["Accessible AI design", "Inclusive leadership", "Innovation frameworks"],
+        "amenities": ["Oceanfront venue", "Accessible accommodations", "Networking events"],
+        "speakers": ["Dr. Dédé", "Accessibility advocates", "Tech innovators"],
+        "revenue_projected": 525000
+    },
+    {
+        "id": 3,
+        "name": "Board Directors AI Governance Intensive",
+        "type": "executive_education",
+        "dates": "2026-01-20 to 2026-01-22",
+        "location": "Aspen, CO",
+        "capacity": 30,
+        "registered": 12,
+        "pricing": "$15,000 per person",
+        "status": "planning_phase",
+        "focus": ["Board oversight of AI", "Risk governance", "Strategic planning"],
+        "amenities": ["Luxury mountain lodge", "Ski access", "Private chef"],
+        "speakers": ["Dr. Dédé", "Board governance experts", "AI ethics specialists"],
+        "revenue_projected": 450000
+    }
+]
+
+# Enhanced Revenue Streams for AI Empire
+REVENUE_STREAMS = [
+    {
+        "id": 1,
+        "name": "Speaking & Authority Revenue",
+        "current_month": 175000,
+        "target_month": 200000,
+        "ytd": 1680000,
+        "target_ytd": 2400000,
+        "growth_rate": 35.8,
+        "last_updated": datetime.now().isoformat(),
+        "sources": ["Corporate keynotes: $25K-75K", "Board presentations: $75K-200K", "Workshop delivery: $50K-150K", "Advisory retainers: $25K-100K monthly"]
+    },
+    {
+        "id": 2,
+        "name": "Platform & SaaS Revenue",
+        "current_month": 285000,
+        "target_month": 400000,
+        "ytd": 2560000,
+        "target_ytd": 4800000,
+        "growth_rate": 42.1,
+        "last_updated": datetime.now().isoformat(),
+        "sources": ["Enterprise subscriptions: $2K-100K monthly", "Implementation services: $50K-500K", "Framework licensing: $25K-100K", "Training & certification: $5K-15K"]
+    },
+    {
+        "id": 3,
+        "name": "Consulting & Professional Services",
+        "current_month": 425000,
+        "target_month": 500000,
+        "ytd": 3825000,
+        "target_ytd": 6000000,
+        "growth_rate": 28.3,
+        "last_updated": datetime.now().isoformat(),
+        "sources": ["Risk assessments: $50K-200K", "Governance implementation: $100K-500K", "Compliance audits: $25K-100K", "Crisis response: $100K+"]
+    },
+    {
+        "id": 4,
+        "name": "Retreat & Events Revenue",
+        "current_month": 156000,
+        "target_month": 200000,
+        "ytd": 1404000,
+        "target_ytd": 2400000,
+        "growth_rate": 22.7,
+        "last_updated": datetime.now().isoformat(),
+        "sources": ["Luxury retreats: $12.5K per person", "Executive education: $15K per person", "Curated conferences: $3.5K per person", "Private events: Custom pricing"]
+    },
+    {
+        "id": 5,
+        "name": "Executive Positions & Board Revenue",
+        "current_month": 87500,
+        "target_month": 100000,
+        "ytd": 787500,
+        "target_ytd": 1200000,
+        "growth_rate": 18.9,
+        "last_updated": datetime.now().isoformat(),
+        "sources": ["Executive compensation", "Board director fees", "Advisory retainers", "Equity packages"]
     }
 ]
 
