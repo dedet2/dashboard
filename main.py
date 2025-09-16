@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import os
 import logging
 import json
+import requests
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -18,6 +19,16 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# API Configuration
+APOLLO_API_KEY = os.getenv('APOLLO_API_KEY')
+AIRTABLE_API_KEY = os.getenv('AIRTABLE_API_KEY') 
+PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
+
+# API Base URLs
+APOLLO_BASE_URL = "https://api.apollo.io/v1"
+AIRTABLE_BASE_URL = "https://api.airtable.com/v0"
+PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
@@ -550,6 +561,88 @@ AI_EMPIRE_AGENTS = [
         "intelligence_outputs": ["Performance reports", "Optimization strategies", "ROI analysis"]
     }
 ]
+
+# External API Integration Functions
+def call_apollo_api(endpoint, method='GET', data=None):
+    """Make authenticated API calls to Apollo.io"""
+    if not APOLLO_API_KEY:
+        logger.warning("Apollo API key not configured")
+        return None
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Api-Key': APOLLO_API_KEY
+    }
+    
+    try:
+        url = f"{APOLLO_BASE_URL}/{endpoint}"
+        if method == 'GET':
+            response = requests.get(url, headers=headers)
+        elif method == 'POST':
+            response = requests.post(url, headers=headers, json=data)
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Apollo API error: {e}")
+        return None
+
+def call_airtable_api(base_id, table_name, method='GET', data=None, record_id=None):
+    """Make authenticated API calls to Airtable"""
+    if not AIRTABLE_API_KEY:
+        logger.warning("Airtable API key not configured")
+        return None
+    
+    headers = {
+        'Authorization': f'Bearer {AIRTABLE_API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    
+    try:
+        if record_id:
+            url = f"{AIRTABLE_BASE_URL}/{base_id}/{table_name}/{record_id}"
+        else:
+            url = f"{AIRTABLE_BASE_URL}/{base_id}/{table_name}"
+        
+        if method == 'GET':
+            response = requests.get(url, headers=headers)
+        elif method == 'POST':
+            response = requests.post(url, headers=headers, json=data)
+        elif method == 'PATCH':
+            response = requests.patch(url, headers=headers, json=data)
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Airtable API error: {e}")
+        return None
+
+def call_perplexity_api(prompt, model="llama-3.1-sonar-small-128k-online"):
+    """Make authenticated API calls to Perplexity"""
+    if not PERPLEXITY_API_KEY:
+        logger.warning("Perplexity API key not configured")
+        return None
+    
+    headers = {
+        'Authorization': f'Bearer {PERPLEXITY_API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    
+    data = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1000,
+        "temperature": 0.2
+    }
+    
+    try:
+        response = requests.post(f"{PERPLEXITY_BASE_URL}/chat/completions", headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        return result.get('choices', [{}])[0].get('message', {}).get('content', '')
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Perplexity API error: {e}")
+        return None
 
 # Enhanced Health & Wellness Management
 HEALTH_WELLNESS = {
