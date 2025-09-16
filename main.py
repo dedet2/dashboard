@@ -1481,9 +1481,10 @@ DASHBOARD_HTML = """
         }
         
         function updateOverview(data) {
-            document.getElementById('totalRevenue').textContent = `$${data.total_revenue.toLocaleString()}`;
-            document.getElementById('activeAgents').textContent = data.active_agents;
-            document.getElementById('appointments').textContent = data.upcoming_appointments;
+            const overview = data.empire_overview || data;
+            document.getElementById('totalRevenue').textContent = `$${overview.total_monthly_revenue.toLocaleString()}`;
+            document.getElementById('activeAgents').textContent = overview.active_agents;
+            document.getElementById('appointments').textContent = overview.upcoming_retreats || 0;
         }
         
         function updateRevenueStreams(streams) {
