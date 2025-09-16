@@ -405,157 +405,220 @@ REVENUE_STREAMS = [
     {
         "id": 1,
         "name": "Speaking & Authority Revenue",
-        "current_month": 175000,
-        "target_month": 200000,
-        "ytd": 1680000,
-        "target_ytd": 2400000,
-        "growth_rate": 35.8,
+        "current_month": 850000,
+        "target_month": 1200000,
+        "ytd": 8500000,
+        "target_ytd": 14400000,
+        "growth_rate": 45.8,
         "last_updated": datetime.now().isoformat(),
-        "sources": ["Corporate keynotes: $25K-75K", "Board presentations: $75K-200K", "Workshop delivery: $50K-150K", "Advisory retainers: $25K-100K monthly"]
+        "sources": ["Corporate keynotes: $75K-250K", "Board presentations: $200K-500K", "Workshop delivery: $150K-400K", "Advisory retainers: $100K-300K monthly"],
+        "projections": {
+            "12_month": 15600000,
+            "24_month": 24000000,
+            "scaling_factor": 1.8
+        }
     },
     {
         "id": 2,
         "name": "Platform & SaaS Revenue",
-        "current_month": 285000,
-        "target_month": 400000,
-        "ytd": 2560000,
-        "target_ytd": 4800000,
-        "growth_rate": 42.1,
+        "current_month": 1250000,
+        "target_month": 1800000,
+        "ytd": 12500000,
+        "target_ytd": 21600000,
+        "growth_rate": 52.1,
         "last_updated": datetime.now().isoformat(),
-        "sources": ["Enterprise subscriptions: $2K-100K monthly", "Implementation services: $50K-500K", "Framework licensing: $25K-100K", "Training & certification: $5K-15K"]
+        "sources": ["Enterprise subscriptions: $10K-500K monthly", "Implementation services: $200K-2M", "Framework licensing: $100K-500K", "Training & certification: $25K-75K"],
+        "projections": {
+            "12_month": 22800000,
+            "24_month": 36000000,
+            "scaling_factor": 2.2
+        }
     },
     {
         "id": 3,
         "name": "Consulting & Professional Services",
-        "current_month": 425000,
-        "target_month": 500000,
-        "ytd": 3825000,
-        "target_ytd": 6000000,
-        "growth_rate": 28.3,
+        "current_month": 1850000,
+        "target_month": 2200000,
+        "ytd": 18500000,
+        "target_ytd": 26400000,
+        "growth_rate": 38.3,
         "last_updated": datetime.now().isoformat(),
-        "sources": ["Risk assessments: $50K-200K", "Governance implementation: $100K-500K", "Compliance audits: $25K-100K", "Crisis response: $100K+"]
+        "sources": ["Risk assessments: $200K-1M", "Governance implementation: $500K-3M", "Compliance audits: $100K-500K", "Crisis response: $500K-2M"],
+        "projections": {
+            "12_month": 28800000,
+            "24_month": 42000000,
+            "scaling_factor": 1.9
+        }
     },
     {
         "id": 4,
         "name": "Retreat & Events Revenue",
-        "current_month": 156000,
-        "target_month": 200000,
-        "ytd": 1404000,
-        "target_ytd": 2400000,
-        "growth_rate": 22.7,
+        "current_month": 650000,
+        "target_month": 900000,
+        "ytd": 6500000,
+        "target_ytd": 10800000,
+        "growth_rate": 32.7,
         "last_updated": datetime.now().isoformat(),
-        "sources": ["Luxury retreats: $12.5K per person", "Executive education: $15K per person", "Curated conferences: $3.5K per person", "Private events: Custom pricing"]
+        "sources": ["Luxury retreats: $25K per person", "Executive education: $35K per person", "Curated conferences: $8.5K per person", "Private events: $50K-200K"],
+        "projections": {
+            "12_month": 12000000,
+            "24_month": 18000000,
+            "scaling_factor": 1.6
+        }
     },
     {
         "id": 5,
         "name": "Executive Positions & Board Revenue",
-        "current_month": 87500,
-        "target_month": 100000,
-        "ytd": 787500,
-        "target_ytd": 1200000,
-        "growth_rate": 18.9,
+        "current_month": 425000,
+        "target_month": 600000,
+        "ytd": 4250000,
+        "target_ytd": 7200000,
+        "growth_rate": 28.9,
         "last_updated": datetime.now().isoformat(),
-        "sources": ["Executive compensation", "Board director fees", "Advisory retainers", "Equity packages"]
+        "sources": ["Executive compensation: $500K-2M annually", "Board director fees: $75K-300K", "Advisory retainers: $50K-200K monthly", "Equity packages: $1M-10M"],
+        "projections": {
+            "12_month": 8400000,
+            "24_month": 12000000,
+            "scaling_factor": 1.4
+        }
     }
 ]
 
+# AI Empire KPI Metrics
 KPI_METRICS = [
     {
         "id": 1,
         "name": "Monthly Recurring Revenue",
-        "value": 100000,
-        "target": 120000,
+        "value": 5025000,
+        "target": 6700000,
         "unit": "USD",
         "trend": "up",
-        "change_percent": 8.5,
-        "category": "revenue"
+        "change_percent": 42.8,
+        "category": "revenue",
+        "empire_focus": "Total MRR across all revenue streams - $50M+ ARR target"
     },
     {
         "id": 2,
-        "name": "Customer Acquisition Cost",
-        "value": 250,
-        "target": 200,
-        "unit": "USD",
-        "trend": "down",
-        "change_percent": -5.2,
-        "category": "marketing"
+        "name": "AI Agent Performance Score",
+        "value": 87.3,
+        "target": 90.0,
+        "unit": "%",
+        "trend": "up",
+        "change_percent": 5.2,
+        "category": "operations",
+        "empire_focus": "Average performance across all 11 AI agents"
     },
     {
         "id": 3,
-        "name": "Customer Lifetime Value",
-        "value": 5200,
-        "target": 5000,
+        "name": "Speaking Pipeline Value",
+        "value": 2850000,
+        "target": 3000000,
         "unit": "USD",
         "trend": "up",
-        "change_percent": 4.0,
-        "category": "revenue"
+        "change_percent": 28.7,
+        "category": "pipeline",
+        "empire_focus": "Total value of speaking opportunities in pipeline"
     },
     {
         "id": 4,
-        "name": "Conversion Rate",
-        "value": 3.2,
-        "target": 3.5,
+        "name": "Enterprise Lead Conversion",
+        "value": 16.3,
+        "target": 20.0,
         "unit": "%",
         "trend": "up",
-        "change_percent": 0.8,
-        "category": "marketing"
+        "change_percent": 3.1,
+        "category": "sales",
+        "empire_focus": "Enterprise leads converted to qualified opportunities"
+    },
+    {
+        "id": 5,
+        "name": "Authority Building Score",
+        "value": 8.2,
+        "target": 9.0,
+        "unit": "/10",
+        "trend": "up",
+        "change_percent": 15.4,
+        "category": "authority",
+        "empire_focus": "Combined LinkedIn, YouTube, and podcast reach metrics"
+    },
+    {
+        "id": 6,
+        "name": "Health & Wellness Score",
+        "value": 8.8,
+        "target": 8.5,
+        "unit": "/10",
+        "trend": "up",
+        "change_percent": 7.8,
+        "category": "wellness",
+        "empire_focus": "Energy, stress, and recovery optimization"
+    },
+    {
+        "id": 7,
+        "name": "Platform Subscription Growth",
+        "value": 42.1,
+        "target": 45.0,
+        "unit": "%",
+        "trend": "up",
+        "change_percent": 12.3,
+        "category": "growth",
+        "empire_focus": "Month-over-month SaaS platform growth"
+    },
+    {
+        "id": 8,
+        "name": "Retreat Revenue per Event",
+        "value": 312500,
+        "target": 400000,
+        "unit": "USD",
+        "trend": "up",
+        "change_percent": 18.9,
+        "category": "events",
+        "empire_focus": "Average revenue per luxury retreat event"
     }
 ]
 
-AI_AGENTS = [
-    {
-        "id": 1,
-        "name": "LinkedIn Outreach Agent",
-        "status": "active",
-        "last_activity": datetime.now().isoformat(),
-        "tasks_completed": 45,
-        "success_rate": 78.5,
-        "next_scheduled": (datetime.now() + timedelta(hours=2)).isoformat()
-    },
-    {
-        "id": 2,
-        "name": "Content Creation Agent",
-        "status": "active",
-        "last_activity": (datetime.now() - timedelta(minutes=30)).isoformat(),
-        "tasks_completed": 23,
-        "success_rate": 92.1,
-        "next_scheduled": (datetime.now() + timedelta(hours=4)).isoformat()
-    },
-    {
-        "id": 3,
-        "name": "Email Marketing Agent",
-        "status": "paused",
-        "last_activity": (datetime.now() - timedelta(hours=2)).isoformat(),
-        "tasks_completed": 67,
-        "success_rate": 85.3,
-        "next_scheduled": (datetime.now() + timedelta(hours=6)).isoformat()
-    }
-]
+# Legacy AI Agents (for backward compatibility)
+AI_AGENTS = [agent for agent in AI_EMPIRE_AGENTS[:3]]  # LinkedIn, Content, and Email agents for compatibility
 
 MILESTONES = [
     {
         "id": 1,
-        "title": "Q1 Revenue Target",
-        "target_date": "2025-03-31",
-        "progress": 85,
+        "title": "$50M AI Empire Phase 1",
+        "target_date": "2025-12-31",
+        "progress": 68,
         "status": "on_track",
-        "description": "Achieve $300K in Q1 revenue"
+        "description": "Complete foundational AI agent deployment and achieve $3-6M annual run rate"
     },
     {
         "id": 2,
-        "title": "Platform Launch",
+        "title": "Authority Platform Dominance",
         "target_date": "2025-06-15",
-        "progress": 45,
-        "status": "in_progress",
-        "description": "Launch new RiskTravel intelligence platform"
+        "progress": 72,
+        "status": "ahead_of_schedule",
+        "description": "Establish market leadership in AI governance space with 50K+ LinkedIn followers"
     },
     {
         "id": 3,
-        "title": "Team Expansion",
+        "title": "Enterprise SaaS Scale",
         "target_date": "2025-09-30",
-        "progress": 20,
+        "progress": 45,
+        "status": "in_progress",
+        "description": "Scale platform to 100+ enterprise clients with $500K+ MRR"
+    },
+    {
+        "id": 4,
+        "title": "Luxury Retreat Empire",
+        "target_date": "2026-03-31",
+        "progress": 35,
         "status": "planning",
-        "description": "Hire 5 additional team members"
+        "description": "Establish 12+ annual luxury retreats generating $2M+ revenue"
+    },
+    {
+        "id": 5,
+        "title": "Board Position Portfolio",
+        "target_date": "2025-12-31",
+        "progress": 25,
+        "status": "early_stage",
+        "description": "Secure 3-5 board positions with combined compensation $500K+"
     }
 ]
 
@@ -1399,6 +1462,474 @@ def create_health_metric():
     except Exception as e:
         logger.error(f"Create health metric error: {e}")
         return jsonify({"error": "Failed to create health metric"}), 500
+
+# AI Empire Agent Management routes
+@app.route('/api/empire/agents', methods=['GET'])
+@jwt_required()
+def get_empire_agents():
+    return jsonify(AI_EMPIRE_AGENTS)
+
+@app.route('/api/empire/agents/<int:agent_id>', methods=['GET'])
+@jwt_required()
+def get_empire_agent(agent_id):
+    agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+    if not agent:
+        return jsonify({"error": "Agent not found"}), 404
+    return jsonify(agent)
+
+@app.route('/api/empire/agents/<int:agent_id>/status', methods=['PUT'])
+@jwt_required()
+def update_empire_agent_status(agent_id):
+    try:
+        agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        agent['status'] = data.get('status', agent['status'])
+        agent['last_activity'] = datetime.now().isoformat()
+        
+        return jsonify(agent)
+    except Exception as e:
+        logger.error(f"Update agent status error: {e}")
+        return jsonify({"error": "Failed to update agent status"}), 500
+
+@app.route('/api/empire/agents/<int:agent_id>/performance', methods=['POST'])
+@jwt_required()
+def update_agent_performance(agent_id):
+    try:
+        agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        if 'performance' in data:
+            agent['performance'].update(data['performance'])
+        agent['last_activity'] = datetime.now().isoformat()
+        
+        return jsonify(agent)
+    except Exception as e:
+        logger.error(f"Update agent performance error: {e}")
+        return jsonify({"error": "Failed to update agent performance"}), 500
+
+@app.route('/api/empire/agents/tier/<string:tier>', methods=['GET'])
+@jwt_required()
+def get_agents_by_tier(tier):
+    agents = [a for a in AI_EMPIRE_AGENTS if a['tier'] == tier]
+    return jsonify(agents)
+
+# Health & Wellness Management routes
+@app.route('/api/wellness/energy', methods=['GET'])
+@jwt_required()
+def get_energy_tracking():
+    return jsonify(HEALTH_WELLNESS['energy_tracking'])
+
+@app.route('/api/wellness/energy', methods=['POST'])
+@jwt_required()
+def add_energy_entry():
+    try:
+        data = request.get_json()
+        new_entry = {
+            "id": len(HEALTH_WELLNESS['energy_tracking']) + 1,
+            "date": data.get('date', datetime.now().isoformat()),
+            "energy_level": data.get('energy_level'),
+            "focus_level": data.get('focus_level'),
+            "stress_level": data.get('stress_level'),
+            "sleep_hours": data.get('sleep_hours'),
+            "recovery_time": data.get('recovery_time'),
+            "notes": data.get('notes', '')
+        }
+        HEALTH_WELLNESS['energy_tracking'].append(new_entry)
+        return jsonify(new_entry), 201
+    except Exception as e:
+        logger.error(f"Add energy entry error: {e}")
+        return jsonify({"error": "Failed to add energy entry"}), 500
+
+@app.route('/api/wellness/goals', methods=['GET'])
+@jwt_required()
+def get_wellness_goals():
+    return jsonify(HEALTH_WELLNESS['wellness_goals'])
+
+@app.route('/api/wellness/alerts', methods=['GET'])
+@jwt_required()
+def get_wellness_alerts():
+    return jsonify(HEALTH_WELLNESS['alerts'])
+
+@app.route('/api/wellness/overview', methods=['GET'])
+@jwt_required()
+def get_wellness_overview():
+    return jsonify(HEALTH_WELLNESS)
+
+# Executive Opportunities Management routes
+@app.route('/api/executive/opportunities', methods=['GET'])
+@jwt_required()
+def get_executive_opportunities():
+    return jsonify(EXECUTIVE_OPPORTUNITIES)
+
+@app.route('/api/executive/opportunities/<int:opp_id>', methods=['GET'])
+@jwt_required()
+def get_executive_opportunity(opp_id):
+    opp = next((o for o in EXECUTIVE_OPPORTUNITIES if o['id'] == opp_id), None)
+    if not opp:
+        return jsonify({"error": "Opportunity not found"}), 404
+    return jsonify(opp)
+
+@app.route('/api/executive/opportunities', methods=['POST'])
+@jwt_required()
+def create_executive_opportunity():
+    try:
+        data = request.get_json()
+        new_opp = {
+            "id": len(EXECUTIVE_OPPORTUNITIES) + 1,
+            "type": data.get('type'),
+            "title": data.get('title'),
+            "company": data.get('company'),
+            "compensation": data.get('compensation'),
+            "location": data.get('location'),
+            "status": data.get('status', 'applied'),
+            "match_score": data.get('match_score', 0),
+            "requirements": data.get('requirements', []),
+            "application_date": data.get('application_date', datetime.now().date().isoformat()),
+            "next_step": data.get('next_step', ''),
+            "notes": data.get('notes', '')
+        }
+        EXECUTIVE_OPPORTUNITIES.append(new_opp)
+        return jsonify(new_opp), 201
+    except Exception as e:
+        logger.error(f"Create executive opportunity error: {e}")
+        return jsonify({"error": "Failed to create executive opportunity"}), 500
+
+@app.route('/api/executive/opportunities/<int:opp_id>/status', methods=['PUT'])
+@jwt_required()
+def update_opportunity_status(opp_id):
+    try:
+        opp = next((o for o in EXECUTIVE_OPPORTUNITIES if o['id'] == opp_id), None)
+        if not opp:
+            return jsonify({"error": "Opportunity not found"}), 404
+        
+        data = request.get_json()
+        opp.update({
+            "status": data.get('status', opp['status']),
+            "next_step": data.get('next_step', opp['next_step']),
+            "notes": data.get('notes', opp['notes'])
+        })
+        
+        return jsonify(opp)
+    except Exception as e:
+        logger.error(f"Update opportunity status error: {e}")
+        return jsonify({"error": "Failed to update opportunity status"}), 500
+
+@app.route('/api/executive/opportunities/type/<string:opportunity_type>', methods=['GET'])
+@jwt_required()
+def get_opportunities_by_type(opportunity_type):
+    opportunities = [o for o in EXECUTIVE_OPPORTUNITIES if o['type'] == opportunity_type]
+    return jsonify(opportunities)
+
+# Retreat Events Management routes
+@app.route('/api/retreats/events', methods=['GET'])
+@jwt_required()
+def get_retreat_events():
+    return jsonify(RETREAT_EVENTS)
+
+@app.route('/api/retreats/events/<int:event_id>', methods=['GET'])
+@jwt_required()
+def get_retreat_event(event_id):
+    event = next((e for e in RETREAT_EVENTS if e['id'] == event_id), None)
+    if not event:
+        return jsonify({"error": "Retreat event not found"}), 404
+    return jsonify(event)
+
+@app.route('/api/retreats/events', methods=['POST'])
+@jwt_required()
+def create_retreat_event():
+    try:
+        data = request.get_json()
+        new_event = {
+            "id": len(RETREAT_EVENTS) + 1,
+            "name": data.get('name'),
+            "type": data.get('type'),
+            "dates": data.get('dates'),
+            "location": data.get('location'),
+            "capacity": data.get('capacity', 0),
+            "registered": data.get('registered', 0),
+            "pricing": data.get('pricing'),
+            "status": data.get('status', 'planning'),
+            "focus": data.get('focus', []),
+            "amenities": data.get('amenities', []),
+            "speakers": data.get('speakers', []),
+            "revenue_projected": data.get('revenue_projected', 0)
+        }
+        RETREAT_EVENTS.append(new_event)
+        return jsonify(new_event), 201
+    except Exception as e:
+        logger.error(f"Create retreat event error: {e}")
+        return jsonify({"error": "Failed to create retreat event"}), 500
+
+@app.route('/api/retreats/events/<int:event_id>/registration', methods=['PUT'])
+@jwt_required()
+def update_event_registration(event_id):
+    try:
+        event = next((e for e in RETREAT_EVENTS if e['id'] == event_id), None)
+        if not event:
+            return jsonify({"error": "Retreat event not found"}), 404
+        
+        data = request.get_json()
+        event.update({
+            "registered": data.get('registered', event['registered']),
+            "status": data.get('status', event['status'])
+        })
+        
+        return jsonify(event)
+    except Exception as e:
+        logger.error(f"Update event registration error: {e}")
+        return jsonify({"error": "Failed to update event registration"}), 500
+
+# Enhanced Agent Communication & Autonomous Integration routes
+@app.route('/api/empire/agents/<int:agent_id>/tasks', methods=['POST'])
+@jwt_required()
+def dispatch_agent_task(agent_id):
+    try:
+        agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        task = {
+            "id": f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{agent_id}",
+            "agent_id": agent_id,
+            "agent_name": agent['name'],
+            "task_type": data.get('task_type'),
+            "priority": data.get('priority', 'normal'),
+            "parameters": data.get('parameters', {}),
+            "target_completion": data.get('target_completion'),
+            "status": "dispatched",
+            "created_at": datetime.now().isoformat(),
+            "estimated_duration": data.get('estimated_duration', '30m')
+        }
+        
+        # Update agent's last activity and performance
+        agent['last_activity'] = datetime.now().isoformat()
+        agent['performance']['tasks_completed'] += 1
+        
+        return jsonify(task), 201
+    except Exception as e:
+        logger.error(f"Dispatch agent task error: {e}")
+        return jsonify({"error": "Failed to dispatch task"}), 500
+
+@app.route('/api/empire/agents/<int:agent_id>/schedule', methods=['POST'])
+@jwt_required()
+def schedule_agent_run(agent_id):
+    try:
+        agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        schedule = {
+            "id": f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{agent_id}",
+            "agent_id": agent_id,
+            "agent_name": agent['name'],
+            "schedule_type": data.get('schedule_type', 'recurring'),
+            "frequency": data.get('frequency', 'daily'),
+            "next_run": data.get('next_run'),
+            "max_runs": data.get('max_runs'),
+            "active": True,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        agent['next_scheduled'] = schedule['next_run']
+        
+        return jsonify(schedule), 201
+    except Exception as e:
+        logger.error(f"Schedule agent run error: {e}")
+        return jsonify({"error": "Failed to schedule agent run"}), 500
+
+@app.route('/api/empire/agents/<int:agent_id>/messages', methods=['POST'])
+@jwt_required()
+def send_agent_message(agent_id):
+    try:
+        agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        message = {
+            "id": f"msg_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{agent_id}",
+            "agent_id": agent_id,
+            "agent_name": agent['name'],
+            "message_type": data.get('message_type', 'instruction'),
+            "content": data.get('content'),
+            "priority": data.get('priority', 'normal'),
+            "requires_response": data.get('requires_response', False),
+            "status": "delivered" if agent['status'] == 'active' else "queued",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        agent['last_activity'] = datetime.now().isoformat()
+        
+        return jsonify(message), 201
+    except Exception as e:
+        logger.error(f"Send agent message error: {e}")
+        return jsonify({"error": "Failed to send message"}), 500
+
+@app.route('/api/empire/communication/broadcast', methods=['POST'])
+@jwt_required()
+def broadcast_to_agents():
+    try:
+        data = request.get_json()
+        message = data.get('message')
+        agent_ids = data.get('agent_ids', [])
+        
+        # Simulate broadcasting message to specified agents
+        responses = []
+        for agent_id in agent_ids:
+            agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+            if agent:
+                responses.append({
+                    "agent_id": agent_id,
+                    "agent_name": agent['name'],
+                    "status": "message_received",
+                    "timestamp": datetime.now().isoformat()
+                })
+        
+        return jsonify({
+            "broadcast_id": f"broadcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "message": message,
+            "responses": responses,
+            "success_count": len(responses)
+        })
+    except Exception as e:
+        logger.error(f"Broadcast to agents error: {e}")
+        return jsonify({"error": "Failed to broadcast to agents"}), 500
+
+@app.route('/api/empire/communication/agent/<int:agent_id>/command', methods=['POST'])
+@jwt_required()
+def send_agent_command(agent_id):
+    try:
+        agent = next((a for a in AI_EMPIRE_AGENTS if a['id'] == agent_id), None)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        command = data.get('command')
+        parameters = data.get('parameters', {})
+        
+        # Simulate sending command to agent
+        response = {
+            "agent_id": agent_id,
+            "agent_name": agent['name'],
+            "command": command,
+            "parameters": parameters,
+            "status": "command_executed" if agent['status'] == 'active' else "agent_inactive",
+            "timestamp": datetime.now().isoformat(),
+            "execution_time": "0.5s"
+        }
+        
+        # Update agent's last activity
+        agent['last_activity'] = datetime.now().isoformat()
+        
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Send agent command error: {e}")
+        return jsonify({"error": "Failed to send agent command"}), 500
+
+@app.route('/api/empire/integration/status', methods=['GET'])
+@jwt_required()
+def get_integration_status():
+    integration_health = {
+        "timestamp": datetime.now().isoformat(),
+        "overall_status": "healthy",
+        "agent_communication": "active",
+        "platform_integrations": {
+            "apollo": "connected",
+            "linkedin_sales_navigator": "connected", 
+            "perplexity": "connected",
+            "mindstudio": "connected",
+            "make_com": "connected",
+            "github_spark": "beta"
+        },
+        "agent_health": {
+            "active_agents": len([a for a in AI_EMPIRE_AGENTS if a['status'] == 'active']),
+            "total_agents": len(AI_EMPIRE_AGENTS),
+            "average_performance": sum(a['performance']['success_rate'] for a in AI_EMPIRE_AGENTS) / len(AI_EMPIRE_AGENTS)
+        }
+    }
+    return jsonify(integration_health)
+
+# $50M+ Empire Projections
+@app.route('/api/empire/projections', methods=['GET'])
+@jwt_required()
+def get_empire_projections():
+    total_current_mrr = sum(stream['current_month'] for stream in REVENUE_STREAMS)
+    total_target_mrr = sum(stream['target_month'] for stream in REVENUE_STREAMS)
+    
+    projections = {
+        "current_metrics": {
+            "mrr": total_current_mrr,
+            "arr": total_current_mrr * 12,
+            "achievement_rate": (total_current_mrr / total_target_mrr) * 100
+        },
+        "12_month_projections": {
+            "mrr": sum(stream.get('projections', {}).get('12_month', 0) for stream in REVENUE_STREAMS) // 12,
+            "arr": sum(stream.get('projections', {}).get('12_month', 0) for stream in REVENUE_STREAMS),
+            "growth_factor": 1.8
+        },
+        "24_month_projections": {
+            "mrr": sum(stream.get('projections', {}).get('24_month', 0) for stream in REVENUE_STREAMS) // 12,
+            "arr": sum(stream.get('projections', {}).get('24_month', 0) for stream in REVENUE_STREAMS),
+            "growth_factor": 2.4
+        },
+        "50m_plus_targets": {
+            "target_arr": 60000000,
+            "target_mrr": 5000000,
+            "months_to_target": 18,
+            "required_monthly_growth": 12.5,
+            "key_drivers": [
+                "Platform SaaS scaling to $36M ARR",
+                "Consulting services reaching $42M ARR", 
+                "Speaking authority commanding $24M ARR",
+                "Executive positions portfolio $12M ARR"
+            ]
+        },
+        "phase_milestones": {
+            "phase_1_foundation": {"target_arr": 6000000, "months": 4, "status": "exceeded"},
+            "phase_2_scale": {"target_arr": 25000000, "months": 8, "status": "on_track"},
+            "phase_3_market_leadership": {"target_arr": 60000000, "months": 12, "status": "projected"}
+        },
+        "last_updated": datetime.now().isoformat()
+    }
+    
+    return jsonify(projections)
+
+# Enhanced Dashboard Overview
+@app.route('/api/empire/dashboard', methods=['GET'])
+@jwt_required()
+def get_empire_dashboard():
+    total_revenue = sum(stream['current_month'] for stream in REVENUE_STREAMS)
+    active_agents = len([a for a in AI_EMPIRE_AGENTS if a['status'] == 'active'])
+    avg_performance = sum(a['performance']['success_rate'] for a in AI_EMPIRE_AGENTS) / len(AI_EMPIRE_AGENTS)
+    upcoming_retreats = len([e for e in RETREAT_EVENTS if e['status'] in ['registration_open', 'planning_phase']])
+    executive_opportunities = len([o for o in EXECUTIVE_OPPORTUNITIES if o['status'] in ['interview_stage', 'under_consideration', 'offer_received']])
+    
+    return jsonify({
+        "empire_overview": {
+            "total_monthly_revenue": total_revenue,
+            "revenue_target": sum(stream['target_month'] for stream in REVENUE_STREAMS),
+            "achievement_rate": (total_revenue / sum(stream['target_month'] for stream in REVENUE_STREAMS)) * 100,
+            "active_agents": active_agents,
+            "total_agents": len(AI_EMPIRE_AGENTS),
+            "avg_agent_performance": avg_performance,
+            "upcoming_retreats": upcoming_retreats,
+            "active_executive_opportunities": executive_opportunities,
+            "wellness_score": sum(goal['current'] for goal in HEALTH_WELLNESS['wellness_goals']) / len(HEALTH_WELLNESS['wellness_goals'])
+        },
+        "phase_progress": {
+            "phase_1_foundation": 85,
+            "phase_2_scale": 45,
+            "phase_3_market_leadership": 15
+        },
+        "last_updated": datetime.now().isoformat()
+    })
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
