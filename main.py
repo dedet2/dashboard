@@ -265,6 +265,289 @@ AI_EMPIRE_AGENTS = [
         "next_scheduled": (datetime.now() + timedelta(hours=24)).isoformat(),
         "services": ["Destination assessments", "Accommodation evaluations"],
         "revenue": "25K-75K per assessment project"
+    },
+    # Additional Revenue Generation Agents (12-16)
+    {
+        "id": 12,
+        "name": "Board Director Placement Agent",
+        "tier": "revenue_generation",
+        "function": "Identify and secure board director and advisor positions",
+        "tools": ["WeConnect", "Apollo", "Executive networks", "Board databases"],
+        "status": "active",
+        "performance": {
+            "board_opportunities": 89,
+            "applications_submitted": 23,
+            "interviews_scheduled": 8,
+            "positions_secured": 2,
+            "success_rate": 8.7,
+            "annual_compensation": 450000
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=30)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=4)).isoformat(),
+        "target_roles": ["Board Director", "Advisory Board", "Strategic Advisor"],
+        "compensation": "75K-300K annually + equity"
+    },
+    {
+        "id": 13,
+        "name": "Executive Search AI Agent",
+        "tier": "revenue_generation",
+        "function": "Target high-value C-suite and senior executive positions",
+        "tools": ["WeConnect", "LinkedIn Recruiter", "Executive search networks"],
+        "status": "active",
+        "performance": {
+            "positions_identified": 156,
+            "applications_completed": 34,
+            "interviews_in_progress": 12,
+            "offers_received": 3,
+            "success_rate": 8.8,
+            "target_compensation": 2000000
+        },
+        "last_activity": (datetime.now() - timedelta(hours=1)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=6)).isoformat(),
+        "focus_roles": ["Chief Risk Officer", "Chief AI Officer", "VP AI Ethics"],
+        "salary_range": "500K-2M+ annually"
+    },
+    {
+        "id": 14,
+        "name": "Corporate Partnership Agent",
+        "tier": "revenue_generation",
+        "function": "Secure strategic partnerships and joint ventures",
+        "tools": ["Apollo", "Klenty SDRx", "Partnership databases"],
+        "status": "active",
+        "performance": {
+            "partnerships_identified": 78,
+            "outreach_campaigns": 15,
+            "meetings_scheduled": 23,
+            "partnerships_closed": 4,
+            "success_rate": 5.1,
+            "partnership_value": 1200000
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=45)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=3)).isoformat(),
+        "partnership_types": ["Technology integration", "Co-marketing", "Joint ventures"],
+        "revenue_potential": "100K-500K per partnership"
+    },
+    {
+        "id": 15,
+        "name": "Corporate Training Sales Agent",
+        "tier": "revenue_generation",
+        "function": "Sell AI governance training programs to enterprises",
+        "tools": ["Klenty SDRx", "LinkedIn Sales Navigator", "Training portal"],
+        "status": "active",
+        "performance": {
+            "leads_contacted": 567,
+            "demos_scheduled": 45,
+            "programs_sold": 12,
+            "recurring_clients": 8,
+            "success_rate": 2.1,
+            "monthly_recurring": 180000
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=15)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=2)).isoformat(),
+        "programs": ["AI Ethics Certification", "Governance Implementation", "Risk Assessment"],
+        "pricing": "15K-75K per program"
+    },
+    {
+        "id": 16,
+        "name": "SaaS Platform Sales Agent",
+        "tier": "revenue_generation",
+        "function": "Drive subscriptions for AI governance platform",
+        "tools": ["Platform analytics", "Demo automation", "Customer success tracking"],
+        "status": "active",
+        "performance": {
+            "trials_initiated": 234,
+            "demos_delivered": 89,
+            "subscriptions_converted": 34,
+            "expansion_revenue": 145000,
+            "success_rate": 14.5,
+            "monthly_recurring": 340000
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=20)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=1)).isoformat(),
+        "subscription_tiers": ["Starter: 2K/month", "Professional: 10K/month", "Enterprise: 50K/month"],
+        "focus_metrics": ["MRR growth", "Churn reduction", "Upsells"]
+    },
+    # Additional Authority Building Agents (17-20)
+    {
+        "id": 17,
+        "name": "Research Publication Agent",
+        "tier": "authority_building",
+        "function": "Generate and submit research papers to top journals",
+        "tools": ["Research databases", "Academic networks", "Publication tracking"],
+        "status": "active",
+        "performance": {
+            "papers_submitted": 8,
+            "papers_accepted": 3,
+            "citations_generated": 127,
+            "conference_presentations": 5,
+            "success_rate": 37.5,
+            "h_index_improvement": 3
+        },
+        "last_activity": (datetime.now() - timedelta(hours=2)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=8)).isoformat(),
+        "research_areas": ["AI Ethics", "Algorithmic Bias", "Governance Frameworks"],
+        "target_journals": ["Nature AI", "AI & Society", "IEEE AI Ethics"]
+    },
+    {
+        "id": 18,
+        "name": "Media Relations Agent",
+        "tier": "authority_building",
+        "function": "Secure media coverage and press opportunities",
+        "tools": ["Media databases", "HARO automation", "Press release distribution"],
+        "status": "active",
+        "performance": {
+            "media_pitches": 156,
+            "interviews_secured": 23,
+            "articles_published": 12,
+            "media_mentions": 89,
+            "success_rate": 14.7,
+            "reach_estimate": 2300000
+        },
+        "last_activity": (datetime.now() - timedelta(hours=3)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=5)).isoformat(),
+        "media_types": ["Business press", "Tech publications", "Accessibility media"],
+        "target_outlets": ["Forbes", "Harvard Business Review", "TechCrunch"]
+    },
+    {
+        "id": 19,
+        "name": "Conference Speaker Agent",
+        "tier": "authority_building",
+        "function": "Secure speaking slots at top-tier industry conferences",
+        "tools": ["Conference databases", "Speaker bureau networks", "Proposal automation"],
+        "status": "active",
+        "performance": {
+            "conferences_identified": 234,
+            "proposals_submitted": 67,
+            "speaking_slots_confirmed": 18,
+            "keynote_presentations": 4,
+            "success_rate": 26.9,
+            "audience_reach": 45000
+        },
+        "last_activity": (datetime.now() - timedelta(hours=1)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=3)).isoformat(),
+        "conference_types": ["AI/ML", "Risk Management", "Corporate Governance"],
+        "speaking_fees": "25K-200K per engagement"
+    },
+    {
+        "id": 20,
+        "name": "Thought Leadership Agent",
+        "tier": "authority_building",
+        "function": "Develop and distribute cutting-edge AI governance insights",
+        "tools": ["Trend analysis", "White paper automation", "Distribution networks"],
+        "status": "active",
+        "performance": {
+            "insights_published": 45,
+            "white_papers_released": 8,
+            "thought_leadership_pieces": 23,
+            "industry_citations": 156,
+            "success_rate": 78.3,
+            "influence_score": 94.2
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=40)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=4)).isoformat(),
+        "content_types": ["Industry reports", "Trend predictions", "Best practice frameworks"],
+        "distribution": ["Industry publications", "Executive briefings", "Client reports"]
+    },
+    # Additional Platform Development Agents (21-25)
+    {
+        "id": 21,
+        "name": "API Integration Engine",
+        "tier": "platform_development",
+        "function": "Connect and synchronize all external platforms and tools",
+        "tools": ["WeConnect API", "LinkedIn API", "Apollo API", "Airtable API", "Make.com"],
+        "status": "active",
+        "performance": {
+            "integrations_active": 12,
+            "api_calls_daily": 15678,
+            "sync_success_rate": 98.7,
+            "data_points_processed": 234567,
+            "success_rate": 97.8,
+            "uptime_percentage": 99.2
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=2)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(minutes=15)).isoformat(),
+        "connected_platforms": ["Airtable", "Notion", "WeConnect", "Apollo", "Klenty", "LinkedIn"],
+        "data_flow": "Bi-directional sync with real-time updates"
+    },
+    {
+        "id": 22,
+        "name": "Data Analytics Engine",
+        "tier": "platform_development",
+        "function": "Real-time analytics and business intelligence across all operations",
+        "tools": ["Custom analytics", "Airtable automation", "Dashboard generation"],
+        "status": "active",
+        "performance": {
+            "reports_generated": 89,
+            "metrics_tracked": 456,
+            "insights_delivered": 123,
+            "automation_rules": 34,
+            "success_rate": 94.5,
+            "processing_speed": 0.23
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=5)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(minutes=30)).isoformat(),
+        "analytics_focus": ["Revenue tracking", "Pipeline analysis", "Performance optimization"],
+        "output_formats": ["Real-time dashboards", "Weekly reports", "Executive summaries"]
+    },
+    {
+        "id": 23,
+        "name": "CRM Automation Agent",
+        "tier": "platform_development",
+        "function": "Manage and optimize all CRM operations and workflows",
+        "tools": ["WeConnect", "Apollo CRM", "Klenty automation", "Custom workflows"],
+        "status": "active",
+        "performance": {
+            "contacts_managed": 12567,
+            "workflows_automated": 45,
+            "lead_scoring_accuracy": 89.4,
+            "conversion_optimization": 23.7,
+            "success_rate": 91.2,
+            "data_quality_score": 96.8
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=8)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(minutes=45)).isoformat(),
+        "crm_functions": ["Lead management", "Pipeline automation", "Follow-up sequences"],
+        "optimization_areas": ["Response rates", "Conversion timing", "Segmentation"]
+    },
+    {
+        "id": 24,
+        "name": "Quality Assurance Agent",
+        "tier": "platform_development",
+        "function": "Monitor and ensure quality across all agent operations",
+        "tools": ["Quality metrics", "Performance monitoring", "Error detection"],
+        "status": "active",
+        "performance": {
+            "quality_checks_performed": 1567,
+            "issues_detected": 45,
+            "issues_resolved": 43,
+            "performance_improvements": 12,
+            "success_rate": 95.6,
+            "system_reliability": 98.9
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=12)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=1)).isoformat(),
+        "quality_metrics": ["Accuracy", "Timeliness", "Completeness", "Compliance"],
+        "monitoring_scope": ["All agent operations", "Data integrity", "Performance standards"]
+    },
+    {
+        "id": 25,
+        "name": "Business Intelligence Coordinator",
+        "tier": "platform_development",
+        "function": "Coordinate insights and optimize cross-agent performance",
+        "tools": ["Master dashboard", "Cross-platform analytics", "Strategy optimization"],
+        "status": "active",
+        "performance": {
+            "coordination_tasks": 234,
+            "optimization_recommendations": 67,
+            "strategy_adjustments": 23,
+            "cross_agent_synergies": 45,
+            "success_rate": 89.7,
+            "roi_improvement": 34.5
+        },
+        "last_activity": (datetime.now() - timedelta(minutes=18)).isoformat(),
+        "next_scheduled": (datetime.now() + timedelta(hours=2)).isoformat(),
+        "coordination_areas": ["Agent performance", "Resource allocation", "Strategic alignment"],
+        "intelligence_outputs": ["Performance reports", "Optimization strategies", "ROI analysis"]
     }
 ]
 
