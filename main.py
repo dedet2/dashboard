@@ -1427,18 +1427,20 @@ DASHBOARD_HTML = """
         
         async function loadDashboardData() {
             try {
-                const headers = { Authorization: `Bearer ${authToken}` };
+                const token = localStorage.getItem('authToken');
+                console.log('Token from localStorage:', token ? 'Present' : 'Missing');
+                const headers = { Authorization: `Bearer ${token}` };
                 
                 // Load overview
-                const overview = await axios.get(`${API_BASE}/api/dashboard/overview`, { headers });
+                const overview = await axios.get(`${API_BASE}/api/empire/dashboard`, { headers });
                 updateOverview(overview.data);
                 
                 // Load revenue streams
-                const revenue = await axios.get(`${API_BASE}/api/revenue`, { headers });
+                const revenue = await axios.get(`${API_BASE}/api/empire/revenue`, { headers });
                 updateRevenueStreams(revenue.data);
                 
                 // Load AI agents
-                const agents = await axios.get(`${API_BASE}/api/agents`, { headers });
+                const agents = await axios.get(`${API_BASE}/api/empire/agents`, { headers });
                 updateAIAgents(agents.data);
                 
                 // Load healthcare data
