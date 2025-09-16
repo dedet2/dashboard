@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 import os
 import logging
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,11 +22,22 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # Configuration
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'risktravel-manus-secret-2025')
+jwt_secret = os.getenv('JWT_SECRET_KEY')
+if not jwt_secret:
+    if os.getenv('NODE_ENV') == 'production':
+        raise ValueError("JWT_SECRET_KEY environment variable is required in production")
+    jwt_secret = 'risktravel-dev-secret-2025'  # Development fallback
+    logger.warning("Using development JWT secret. Set JWT_SECRET_KEY environment variable for production.")
+
+app.config['JWT_SECRET_KEY'] = jwt_secret
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
 # Initialize extensions
-CORS(app, origins=["*"])
+# Configure CORS - restrict origins in production
+allowed_origins = os.getenv('ALLOWED_ORIGINS', '*').split(',')
+if os.getenv('NODE_ENV') == 'production' and '*' in allowed_origins:
+    logger.warning("Wildcard CORS origins detected in production. Consider restricting to specific domains.")
+CORS(app, origins=allowed_origins)
 jwt = JWTManager(app)
 
 # JWT configuration
@@ -321,11 +336,11 @@ DASHBOARD_HTML = """
                 <form id="loginForm">
                     <div class="mb-4">
                         <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
-                        <input type="email" id="email" value="dede@risktravel.com" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                        <input type="email" id="email" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                     </div>
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
-                        <input type="password" id="password" value="password123" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                        <input type="password" id="password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                     </div>
                     <div class="flex justify-between">
                         <button type="button" id="cancelLogin" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Cancel</button>
