@@ -1694,6 +1694,9 @@ def dispatch_agent_task(agent_id):
             return jsonify({"error": "Agent not found"}), 404
         
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "No task data provided"}), 400
+            
         task = {
             "id": f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{agent_id}",
             "agent_id": agent_id,
@@ -1707,14 +1710,17 @@ def dispatch_agent_task(agent_id):
             "estimated_duration": data.get('estimated_duration', '30m')
         }
         
-        # Update agent's last activity and performance
+        # Update agent's last activity and performance safely
         agent['last_activity'] = datetime.now().isoformat()
-        agent['performance']['tasks_completed'] += 1
+        
+        # Safely increment tasks dispatched (not completed)
+        perf = agent.setdefault('performance', {})
+        perf['tasks_dispatched'] = perf.get('tasks_dispatched', 0) + 1
         
         return jsonify(task), 201
     except Exception as e:
         logger.error(f"Dispatch agent task error: {e}")
-        return jsonify({"error": "Failed to dispatch task"}), 500
+        return jsonify({"error": f"Failed to dispatch task: {str(e)}"}), 500
 
 @app.route('/api/empire/agents/<int:agent_id>/schedule', methods=['POST'])
 @jwt_required()
