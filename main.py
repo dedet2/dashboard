@@ -1427,16 +1427,25 @@ DASHBOARD_HTML = """
         
         async function loadDashboardData() {
             try {
+                console.log('API_BASE:', API_BASE);
                 const token = localStorage.getItem('authToken');
-                console.log('Token from localStorage:', token ? 'Present' : 'Missing');
-                const headers = { Authorization: `Bearer ${token}` };
+                if (!token) {
+                    console.error('No auth token found, redirecting to login');
+                    showWelcomeScreen();
+                    return;
+                }
+                console.log('Using token for API calls');
+                const headers = { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                };
                 
                 // Load overview
                 const overview = await axios.get(`${API_BASE}/api/empire/dashboard`, { headers });
                 updateOverview(overview.data);
                 
                 // Load revenue streams
-                const revenue = await axios.get(`${API_BASE}/api/empire/revenue`, { headers });
+                const revenue = await axios.get(`${API_BASE}/api/revenue`, { headers });
                 updateRevenueStreams(revenue.data);
                 
                 // Load AI agents
@@ -1453,9 +1462,20 @@ DASHBOARD_HTML = """
                 updateKPIs(kpis.data);
                 
             } catch (error) {
-                console.error('Error loading dashboard data:', error);
-                if (error.response?.status === 401) {
-                    handleLogout();
+                console.error('Dashboard load failed', { 
+                    message: error.message, 
+                    status: error.response?.status, 
+                    data: error.response?.data, 
+                    url: error.config?.url 
+                });
+                if (error.response?.status === 401 || error.response?.status === 422) {
+                    console.error('Authentication failed, clearing token and redirecting to login');
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                    showWelcomeScreen();
+                    document.getElementById('loginModal').classList.remove('hidden');
+                } else {
+                    alert('Failed to load dashboard data: ' + (error.response?.data?.error || error.message || 'Network error'));
                 }
             }
         }
