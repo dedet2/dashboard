@@ -2870,7 +2870,7 @@ DASHBOARD_HTML = """
             const password = document.getElementById('password').value;
             
             try {
-                const response = await axios.post(`${API_BASE}/api/auth/login`, {
+                const response = await axios.post(API_BASE + '/api/auth/login', {
                     email: email,
                     password: password
                 });
@@ -3007,16 +3007,16 @@ DASHBOARD_HTML = """
                     throw new Error('Stream name is required');
                 }
                 
-                const headers = { 'Authorization': `Bearer ${authToken}` };
+                const headers = { 'Authorization': 'Bearer ' + authToken };
                 let response;
                 
                 if (currentEditingId) {
                     // Update existing stream
-                    response = await axios.put(`${API_BASE}/api/revenue/${currentEditingId}`, formData, { headers });
+                    response = await axios.put(API_BASE + '/api/revenue/' + currentEditingId, formData, { headers });
                     showNotification('Revenue stream updated successfully!', 'success');
                 } else {
                     // Create new stream
-                    response = await axios.post(`${API_BASE}/api/revenue`, formData, { headers });
+                    response = await axios.post(API_BASE + '/api/revenue', formData, { headers });
                     showNotification('Revenue stream created successfully!', 'success');
                 }
                 
@@ -3035,8 +3035,8 @@ DASHBOARD_HTML = """
         
         async function editRevenueStream(streamId) {
             try {
-                const headers = { 'Authorization': `Bearer ${authToken}` };
-                const response = await axios.get(`${API_BASE}/api/revenue/${streamId}`, { headers });
+                const headers = { 'Authorization': 'Bearer ' + authToken };
+                const response = await axios.get(API_BASE + '/api/revenue/' + streamId, { headers });
                 openRevenueModal(response.data);
             } catch (error) {
                 console.error('Error fetching revenue stream:', error);
@@ -3061,8 +3061,8 @@ DASHBOARD_HTML = """
                 confirmBtn.textContent = 'Deleting...';
                 confirmBtn.disabled = true;
                 
-                const headers = { 'Authorization': `Bearer ${authToken}` };
-                await axios.delete(`${API_BASE}/api/revenue/${deleteStreamId}`, { headers });
+                const headers = { 'Authorization': 'Bearer ' + authToken };
+                await axios.delete(API_BASE + '/api/revenue/' + deleteStreamId, { headers });
                 
                 showNotification('Revenue stream deleted successfully!', 'success');
                 closeDeleteModal();
@@ -3080,8 +3080,8 @@ DASHBOARD_HTML = """
         
         async function loadRevenueStreams() {
             try {
-                const headers = { 'Authorization': `Bearer ${authToken}` };
-                const response = await axios.get(`${API_BASE}/api/revenue`, { headers });
+                const headers = { 'Authorization': 'Bearer ' + authToken };
+                const response = await axios.get(API_BASE + '/api/revenue', { headers });
                 updateRevenueStreams(response.data);
             } catch (error) {
                 console.error('Error loading revenue streams:', error);
@@ -3092,23 +3092,23 @@ DASHBOARD_HTML = """
         function showNotification(message, type = 'info') {
             // Create notification element
             const notification = document.createElement('div');
-            notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full ${
+            notification.className = 'fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full ' + (
                 type === 'success' ? 'bg-green-500 text-white' :
                 type === 'error' ? 'bg-red-500 text-white' :
                 type === 'warning' ? 'bg-yellow-500 text-white' :
                 'bg-blue-500 text-white'
-            }`;
+            );
             
-            notification.innerHTML = `
+            notification.innerHTML = '
                 <div class="flex items-center space-x-2">
-                    <span>${message}</span>
+                    <span>' + message + '</span>
                     <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                         </svg>
                     </button>
                 </div>
-            `;
+            ';
             
             document.body.appendChild(notification);
             
@@ -3139,30 +3139,30 @@ DASHBOARD_HTML = """
                 }
                 console.log('Using token for API calls');
                 const headers = { 
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': 'Bearer ' + token,
                     'Content-Type': 'application/json'
                 };
                 
                 // Load overview  
-                const overview = await axios.get(`${API_BASE}/api/empire/dashboard`, { headers });
+                const overview = await axios.get(API_BASE + '/api/empire/dashboard', { headers });
                 console.log('Dashboard overview:', overview.data);
                 updateOverview(overview.data);
                 
                 // Load revenue streams
-                const revenue = await axios.get(`${API_BASE}/api/revenue`, { headers });
+                const revenue = await axios.get(API_BASE + '/api/revenue', { headers });
                 updateRevenueStreams(revenue.data);
                 
                 // Load AI agents
-                const agents = await axios.get(`${API_BASE}/api/empire/agents`, { headers });
+                const agents = await axios.get(API_BASE + '/api/empire/agents', { headers });
                 updateAIAgents(agents.data);
                 
                 // Load healthcare data
-                const providers = await axios.get(`${API_BASE}/api/healthcare/providers`, { headers });
-                const appointments = await axios.get(`${API_BASE}/api/healthcare/appointments`, { headers });
+                const providers = await axios.get(API_BASE + '/api/healthcare/providers', { headers });
+                const appointments = await axios.get(API_BASE + '/api/healthcare/appointments', { headers });
                 updateHealthcareData(providers.data, appointments.data);
                 
                 // Load KPIs
-                const kpis = await axios.get(`${API_BASE}/api/kpi`, { headers });
+                const kpis = await axios.get(API_BASE + '/api/kpi', { headers });
                 updateKPIs(kpis.data);
                 
             } catch (error) {
@@ -3193,46 +3193,46 @@ DASHBOARD_HTML = """
         
         function updateRevenueStreams(streams) {
             const container = document.getElementById('revenueStreams');
-            container.innerHTML = streams.map(stream => `
-                <div class="bg-white border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
-                    <div class="flex justify-between items-start mb-3">
-                        <h4 class="font-medium text-gray-900 flex-1">${stream.name}</h4>
-                        <div class="flex space-x-2 ml-2">
-                            <button onclick="editRevenueStream(${stream.id})" class="text-blue-600 hover:text-blue-800 p-1" title="Edit">
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
-                                </svg>
-                            </button>
-                            <button onclick="deleteRevenueStream(${stream.id})" data-stream-name="${stream.name}" class="text-red-600 hover:text-red-800 p-1" title="Delete">
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9zM4 5a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zM8 8a1 1 0 012 0v3a1 1 0 11-2 0V8zM12 8a1 1 0 012 0v3a1 1 0 11-2 0V8z" clip-rule="evenodd"></path>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="space-y-3">
-                        <div class="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                                <span class="text-gray-600">Current:</span>
-                                <span class="font-semibold text-gray-900">$${stream.current_month.toLocaleString()}</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">Target:</span>
-                                <span class="font-semibold text-gray-900">$${stream.target_month.toLocaleString()}</span>
-                            </div>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ${Math.min((stream.current_month / stream.target_month) * 100, 100)}%"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-xs">
-                            <div class="text-gray-600">
-                                YTD: $${stream.ytd.toLocaleString()}
-                            </div>
-                            <div class="text-right ${stream.growth_rate >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                Growth: ${stream.growth_rate}%
-                            </div>
-                        </div>
-                        ${stream.sources && stream.sources.length > 0 ? 
+            container.innerHTML = streams.map(stream => 
+                '<div class="bg-white border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">' +
+                    '<div class="flex justify-between items-start mb-3">' +
+                        '<h4 class="font-medium text-gray-900 flex-1">' + stream.name + '</h4>' +
+                        '<div class="flex space-x-2 ml-2">' +
+                            '<button onclick="editRevenueStream(' + stream.id + ')" class="text-blue-600 hover:text-blue-800 p-1" title="Edit">' +
+                                '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">' +
+                                    '<path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>' +
+                                '</svg>' +
+                            '</button>' +
+                            '<button onclick="deleteRevenueStream(' + stream.id + ')" data-stream-name="' + stream.name + '" class="text-red-600 hover:text-red-800 p-1" title="Delete">' +
+                                '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">' +
+                                    '<path fill-rule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9zM4 5a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zM8 8a1 1 0 012 0v3a1 1 0 11-2 0V8zM12 8a1 1 0 012 0v3a1 1 0 11-2 0V8z" clip-rule="evenodd"></path>' +
+                                '</svg>' +
+                            '</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="space-y-3">' +
+                        '<div class="grid grid-cols-2 gap-2 text-sm">' +
+                            '<div>' +
+                                '<span class="text-gray-600">Current:</span>' +
+                                '<span class="font-semibold text-gray-900">$' + stream.current_month.toLocaleString() + '</span>' +
+                            '</div>' +
+                            '<div>' +
+                                '<span class="text-gray-600">Target:</span>' +
+                                '<span class="font-semibold text-gray-900">$' + stream.target_month.toLocaleString() + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="w-full bg-gray-200 rounded-full h-2">' +
+                            '<div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ' + Math.min((stream.current_month / stream.target_month) * 100, 100) + '%"></div>' +
+                        '</div>' +
+                        '<div class="grid grid-cols-2 gap-2 text-xs">' +
+                            '<div class="text-gray-600">' +
+                                'YTD: $' + stream.ytd.toLocaleString() +
+                            '</div>' +
+                            '<div class="text-right ' + (stream.growth_rate >= 0 ? 'text-green-600' : 'text-red-600') + '">' +
+                                'Growth: ' + stream.growth_rate + '%' +
+                            '</div>' +
+                        '</div>' +
+                        (stream.sources && stream.sources.length > 0 ? 
                             '<div class="pt-2 border-t border-gray-100">' +
                                 '<p class="text-xs text-gray-600 mb-1">Sources:</p>' +
                                 '<div class="text-xs text-gray-700 space-y-1">' +
@@ -3240,61 +3240,67 @@ DASHBOARD_HTML = """
                                     (stream.sources.length > 2 ? '<div class="text-gray-500">+ ' + (stream.sources.length - 2) + ' more</div>' : '') +
                                 '</div>' +
                             '</div>'
-                        : ''}
-                    </div>
-                </div>
-            `).join('');
+                        : '') +
+                    '</div>' +
+                '</div>'
+            ).join('');
         }
         
         function updateAIAgents(agents) {
             const container = document.getElementById('aiAgents');
-            container.innerHTML = agents.map(agent => `
-                <div class="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
-                    <div>
-                        <h4 class="font-medium text-gray-900">${agent.name}</h4>
-                        <p class="text-sm text-gray-600">Tasks: ${agent.tasks_completed} | Success: ${agent.success_rate}%</p>
-                    </div>
-                    <div class="flex items-center">
-                        <span class="px-2 py-1 text-xs rounded-full ${agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${agent.status}</span>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = agents.map(agent => {
+                const statusClass = agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                
+                return '<div class="bg-gray-50 p-4 rounded-lg flex justify-between items-center">' +
+                    '<div>' +
+                        '<h4 class="font-medium text-gray-900">' + agent.name + '</h4>' +
+                        '<p class="text-sm text-gray-600">Tasks: ' + agent.tasks_completed + ' | Success: ' + agent.success_rate + '%</p>' +
+                    '</div>' +
+                    '<div class="flex items-center">' +
+                        '<span class="px-2 py-1 text-xs rounded-full ' + statusClass + '">' + agent.status + '</span>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
         }
         
         function updateHealthcareData(providers, appointments) {
             const providersContainer = document.getElementById('healthcareProvidersList');
-            providersContainer.innerHTML = providers.slice(0, 3).map(provider => `
-                <div class="bg-gray-50 p-3 rounded-lg">
-                    <h5 class="font-medium text-gray-900">${provider.name}</h5>
-                    <p class="text-sm text-gray-600">${provider.specialty}</p>
-                    <p class="text-xs text-gray-500">Rating: ${provider.rating}/5</p>
-                </div>
-            `).join('');
+            providersContainer.innerHTML = providers.slice(0, 3).map(provider => 
+                '<div class="bg-gray-50 p-3 rounded-lg">' +
+                    '<h5 class="font-medium text-gray-900">' + provider.name + '</h5>' +
+                    '<p class="text-sm text-gray-600">' + provider.specialty + '</p>' +
+                    '<p class="text-xs text-gray-500">Rating: ' + provider.rating + '/5</p>' +
+                '</div>'
+            ).join('');
             
             const appointmentsContainer = document.getElementById('appointmentsList');
-            appointmentsContainer.innerHTML = appointments.map(apt => `
-                <div class="bg-gray-50 p-3 rounded-lg">
-                    <h5 class="font-medium text-gray-900">${apt.provider}</h5>
-                    <p class="text-sm text-gray-600">${apt.date} at ${apt.time}</p>
-                    <p class="text-xs text-gray-500">${apt.purpose}</p>
-                </div>
-            `).join('');
+            appointmentsContainer.innerHTML = appointments.map(apt => 
+                '<div class="bg-gray-50 p-3 rounded-lg">' +
+                    '<h5 class="font-medium text-gray-900">' + apt.provider + '</h5>' +
+                    '<p class="text-sm text-gray-600">' + apt.date + ' at ' + apt.time + '</p>' +
+                    '<p class="text-xs text-gray-500">' + apt.purpose + '</p>' +
+                '</div>'
+            ).join('');
         }
         
         function updateKPIs(kpis) {
             const container = document.getElementById('kpiMetrics');
-            container.innerHTML = kpis.map(kpi => `
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-medium text-gray-900">${kpi.name}</h4>
-                    <div class="mt-2">
-                        <div class="flex justify-between items-center">
-                            <span class="text-2xl font-bold">${kpi.value}${kpi.unit === 'USD' ? '' : kpi.unit}</span>
-                            <span class="text-sm ${kpi.trend === 'up' ? 'text-green-600' : 'text-red-600'}">${kpi.change_percent > 0 ? '+' : ''}${kpi.change_percent}%</span>
-                        </div>
-                        <div class="text-sm text-gray-600">Target: ${kpi.target}${kpi.unit === 'USD' ? '' : kpi.unit}</div>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = kpis.map(kpi => {
+                const trendClass = kpi.trend === 'up' ? 'text-green-600' : 'text-red-600';
+                const sign = kpi.change_percent > 0 ? '+' : '';
+                const unit = kpi.unit === 'USD' ? '' : kpi.unit;
+                
+                return '<div class="bg-gray-50 p-4 rounded-lg">' +
+                    '<h4 class="font-medium text-gray-900">' + kpi.name + '</h4>' +
+                    '<div class="mt-2">' +
+                        '<div class="flex justify-between items-center">' +
+                            '<span class="text-2xl font-bold">' + kpi.value + unit + '</span>' +
+                            '<span class="text-sm ' + trendClass + '">' + sign + kpi.change_percent + '%</span>' +
+                        '</div>' +
+                        '<div class="text-sm text-gray-600">Target: ' + kpi.target + unit + '</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
         }
     </script>
 </body>
