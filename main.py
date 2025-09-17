@@ -2295,7 +2295,6 @@ DASHBOARD_HTML = """
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/static/js/linkedin-dashboard.js"></script>
     <style>
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
