@@ -3359,16 +3359,8 @@ DASHBOARD_HTML = """
                 selectedBtn.classList.add('border-blue-500', 'text-blue-600');
             }
             
-            // Initialize LinkedIn dashboard if LinkedIn tab is selected
-            if (tabName === 'linkedin') {
-                setTimeout(() => {
-                    initializeLinkedInTabs();
-                    initializeLinkedInDashboard();
-                }, 100);
-            }
+            // Note: LinkedIn dashboard functionality temporarily disabled
         }
-        
-        // LinkedIn tab initialization (moved to main DOMContentLoaded block to avoid conflicts)
     </script>
 </body>
 </html>
