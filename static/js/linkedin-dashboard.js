@@ -19,18 +19,17 @@ class LinkedInDashboard {
     }
     
     init() {
+        this.setupEventListeners();
+        this.setupTabs();
+        
         if (!this.authToken) {
             // Don't redirect, just don't load data - let the template handle login
             console.warn('No auth token found, waiting for authentication');
-            this.setupEventListeners();
-            this.setupTabs();
             return;
         }
         
-        this.setupEventListeners();
         this.loadDashboardData();
         this.startAutoRefresh();
-        this.setupTabs();
     }
     
     setupEventListeners() {
@@ -179,6 +178,12 @@ class LinkedInDashboard {
     }
     
     async loadDashboardData() {
+        // Check if authenticated before making any API calls
+        if (!this.authToken) {
+            console.warn('No auth token available, skipping data load');
+            return;
+        }
+        
         try {
             this.showLoading();
             
@@ -302,8 +307,8 @@ class LinkedInDashboard {
                 this.priorityLeads = data.priority_leads;
                 this.updatePriorityLeadsTable(data.priority_leads);
             }
-        } catch (error) {
-            console.error('Error loading priority leads:', error);
+        } catch (err) {
+            console.error('Error loading priority leads:', err);
         }
     }
     
