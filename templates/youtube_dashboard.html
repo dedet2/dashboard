@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Optimization Pipeline - AI Empire Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .optimization-badge { 
+            transition: all 0.2s ease;
+        }
+        .optimization-badge:hover {
+            transform: scale(1.05);
+        }
+        .video-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .video-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-50" x-data="youtubeDashboard()">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <i class="fab fa-youtube text-3xl"></i>
+                    <h1 class="text-2xl font-bold">YouTube Optimization Pipeline</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm">
+                        <span x-text="stats.total_videos"></span> Videos •
+                        <span x-text="stats.pending_optimization"></span> Pending
+                    </div>
+                    <button @click="showCreateModal = true" 
+                            class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition">
+                        <i class="fas fa-plus mr-2"></i>Add Video
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-sm font-medium text-gray-600">Total Videos</h3>
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.total_videos">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-green-100 text-green-600">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-sm font-medium text-gray-600">AI Optimized</h3>
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.optimized_videos">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-sm font-medium text-gray-600">Avg Score</h3>
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.avg_score">0.0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-sm font-medium text-gray-600">Processing</h3>
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.processing_videos">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <input type="text" 
+                               x-model="searchQuery"
+                               @input="debounceSearch()"
+                               placeholder="Search videos..."
+                               class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                    
+                    <select x-model="filterStatus" @change="loadVideos()" 
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="optimizing">Optimizing</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    
+                    <select x-model="filterCategory" @change="loadVideos()" 
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Categories</option>
+                        <option value="AI Governance">AI Governance</option>
+                        <option value="Accessibility">Accessibility</option>
+                        <option value="Compliance">Compliance</option>
+                        <option value="Risk Management">Risk Management</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <button @click="loadVideos()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                    <button @click="batchOptimize()" 
+                            :disabled="selectedVideos.length === 0"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-magic mr-2"></i>Batch Optimize
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="text-center py-12">
+            <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+            <p class="text-gray-600">Loading videos...</p>
+        </div>
+
+        <!-- Videos Grid -->
+        <div x-show="!loading" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <template x-for="video in videos" :key="video.id">
+                <div class="video-card bg-white rounded-xl shadow-md overflow-hidden">
+                    <!-- Video Header -->
+                    <div class="p-6 border-b border-gray-100">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-gray-900 mb-2 line-clamp-2" x-text="video.title"></h3>
+                                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs" x-text="video.category"></span>
+                                    <span x-text="video.target_audience"></span>
+                                </div>
+                            </div>
+                            <input type="checkbox" 
+                                   :value="video.id"
+                                   x-model="selectedVideos"
+                                   class="ml-4 text-blue-600 rounded">
+                        </div>
+                    </div>
+
+                    <!-- Optimization Status -->
+                    <div class="px-6 py-4 border-b border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <div class="optimization-badge px-3 py-1 rounded-full text-xs font-medium"
+                                     :class="{
+                                         'bg-gray-100 text-gray-800': video.optimization_status === 'pending',
+                                         'bg-yellow-100 text-yellow-800': video.optimization_status === 'optimizing',
+                                         'bg-green-100 text-green-800': video.optimization_status === 'completed',
+                                         'bg-red-100 text-red-800': video.optimization_status === 'failed'
+                                     }"
+                                     x-text="video.optimization_status.charAt(0).toUpperCase() + video.optimization_status.slice(1)">
+                                </div>
+                                <template x-if="video.optimization_score">
+                                    <div class="text-sm text-gray-600">
+                                        Score: <span class="font-medium" x-text="(video.optimization_score * 100).toFixed(1)"></span>%
+                                    </div>
+                                </template>
+                            </div>
+                            <template x-if="video.perplexity_research_used">
+                                <i class="fas fa-brain text-purple-600" title="AI-Enhanced"></i>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Video Details -->
+                    <div class="px-6 py-4">
+                        <div class="space-y-3">
+                            <template x-if="video.primary_topic">
+                                <div class="flex items-center text-sm">
+                                    <i class="fas fa-tag text-gray-400 w-4"></i>
+                                    <span class="ml-2 text-gray-600" x-text="video.primary_topic"></span>
+                                </div>
+                            </template>
+                            
+                            <template x-if="video.video_duration_seconds">
+                                <div class="flex items-center text-sm">
+                                    <i class="fas fa-clock text-gray-400 w-4"></i>
+                                    <span class="ml-2 text-gray-600" x-text="formatDuration(video.video_duration_seconds)"></span>
+                                </div>
+                            </template>
+                            
+                            <div class="flex items-center text-sm">
+                                <i class="fas fa-calendar text-gray-400 w-4"></i>
+                                <span class="ml-2 text-gray-600" x-text="formatDate(video.created_at)"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <button @click="viewVideo(video)" 
+                                    class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                                <i class="fas fa-eye mr-1"></i>View Details
+                            </button>
+                            <div class="flex items-center space-x-2">
+                                <template x-if="video.optimization_status === 'pending' || video.optimization_status === 'failed'">
+                                    <button @click="optimizeVideo(video.id)" 
+                                            class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition">
+                                        <i class="fas fa-magic mr-1"></i>Optimize
+                                    </button>
+                                </template>
+                                <template x-if="video.optimization_status === 'optimizing'">
+                                    <button disabled class="px-3 py-1 bg-yellow-600 text-white rounded text-sm cursor-not-allowed">
+                                        <i class="fas fa-spinner fa-spin mr-1"></i>Processing
+                                    </button>
+                                </template>
+                                <button @click="deleteVideo(video.id)" 
+                                        class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition">
+                                    <i class="fas fa-trash mr-1"></i>Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- No Results -->
+        <div x-show="!loading && videos.length === 0" class="text-center py-12">
+            <i class="fas fa-video text-4xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No videos found</h3>
+            <p class="text-gray-600 mb-4">Get started by adding your first video to optimize.</p>
+            <button @click="showCreateModal = true" 
+                    class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-plus mr-2"></i>Add Your First Video
+            </button>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="pagination.pages > 1" class="mt-8 flex justify-center">
+            <nav class="flex items-center space-x-2">
+                <button @click="changePage(pagination.page - 1)" 
+                        :disabled="!pagination.has_prev"
+                        class="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <template x-for="page in visiblePages" :key="page">
+                    <button @click="changePage(page)"
+                            :class="page === pagination.page ? 'bg-blue-600 text-white' : 'border border-gray-300 hover:bg-gray-50'"
+                            class="px-3 py-2 rounded-lg"
+                            x-text="page">
+                    </button>
+                </template>
+                
+                <button @click="changePage(pagination.page + 1)" 
+                        :disabled="!pagination.has_next"
+                        class="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Create Video Modal -->
+    <div x-show="showCreateModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto"
+             @click.away="showCreateModal = false">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">Add New Video</h2>
+            </div>
+            
+            <form @submit.prevent="createVideo()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                    <input type="text" x-model="newVideo.title" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea x-model="newVideo.description" rows="3"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Primary Topic</label>
+                        <input type="text" x-model="newVideo.primary_topic" placeholder="e.g., AI Governance"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <select x-model="newVideo.category"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="AI Governance">AI Governance</option>
+                            <option value="Accessibility">Accessibility</option>
+                            <option value="Compliance">Compliance</option>
+                            <option value="Risk Management">Risk Management</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
+                        <select x-model="newVideo.target_audience"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="executives">Executives</option>
+                            <option value="compliance_officers">Compliance Officers</option>
+                            <option value="board_directors">Board Directors</option>
+                            <option value="technical_teams">Technical Teams</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Content Type</label>
+                        <select x-model="newVideo.content_type"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="thought_leadership">Thought Leadership</option>
+                            <option value="tutorial">Tutorial</option>
+                            <option value="interview">Interview</option>
+                            <option value="presentation">Presentation</option>
+                            <option value="webinar">Webinar</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Duration (seconds)</label>
+                    <input type="number" x-model="newVideo.video_duration_seconds" min="1"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" @click="showCreateModal = false"
+                            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" :disabled="creatingVideo"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                        <template x-if="creatingVideo">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                        </template>
+                        Create Video
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Video Details Modal -->
+    <div x-show="showDetailsModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-screen overflow-y-auto"
+             @click.away="showDetailsModal = false">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900" x-text="selectedVideo?.title"></h2>
+            </div>
+            
+            <div class="p-6" x-show="selectedVideo">
+                <!-- Video Info -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-3">Video Information</h3>
+                        <div class="space-y-2 text-sm">
+                            <div><span class="font-medium">Category:</span> <span x-text="selectedVideo?.category"></span></div>
+                            <div><span class="font-medium">Target Audience:</span> <span x-text="selectedVideo?.target_audience"></span></div>
+                            <div><span class="font-medium">Content Type:</span> <span x-text="selectedVideo?.content_type"></span></div>
+                            <div><span class="font-medium">Duration:</span> <span x-text="formatDuration(selectedVideo?.video_duration_seconds)"></span></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-3">Optimization Status</h3>
+                        <div class="space-y-2 text-sm">
+                            <div><span class="font-medium">Status:</span> 
+                                <span class="capitalize" x-text="selectedVideo?.optimization_status"></span>
+                            </div>
+                            <template x-if="selectedVideo?.optimization_score">
+                                <div><span class="font-medium">Score:</span> 
+                                    <span x-text="(selectedVideo.optimization_score * 100).toFixed(1) + '%'"></span>
+                                </div>
+                            </template>
+                            <div><span class="font-medium">AI Enhanced:</span> 
+                                <span x-text="selectedVideo?.perplexity_research_used ? 'Yes' : 'No'"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Description -->
+                <template x-if="selectedVideo?.description">
+                    <div class="mb-6">
+                        <h3 class="font-medium text-gray-900 mb-3">Description</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg text-sm" x-text="selectedVideo.description"></div>
+                    </div>
+                </template>
+                
+                <!-- Keywords & Tags -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <template x-if="selectedVideo?.target_keywords?.length > 0">
+                        <div>
+                            <h3 class="font-medium text-gray-900 mb-3">Target Keywords</h3>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="keyword in selectedVideo.target_keywords" :key="keyword">
+                                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs" x-text="keyword"></span>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="selectedVideo?.seo_tags?.length > 0">
+                        <div>
+                            <h3 class="font-medium text-gray-900 mb-3">SEO Tags</h3>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="tag in selectedVideo.seo_tags" :key="tag">
+                                    <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs" x-text="tag"></span>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            
+            <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button @click="showDetailsModal = false"
+                        class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                    Close
+                </button>
+                <template x-if="selectedVideo?.optimization_status === 'pending' || selectedVideo?.optimization_status === 'failed'">
+                    <button @click="optimizeVideo(selectedVideo.id); showDetailsModal = false"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                        <i class="fas fa-magic mr-2"></i>Optimize Video
+                    </button>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        function youtubeDashboard() {
+            return {
+                // State
+                loading: false,
+                videos: [],
+                stats: {
+                    total_videos: 0,
+                    optimized_videos: 0,
+                    processing_videos: 0,
+                    pending_optimization: 0,
+                    avg_score: 0.0
+                },
+                pagination: {
+                    page: 1,
+                    per_page: 12,
+                    total: 0,
+                    pages: 0,
+                    has_next: false,
+                    has_prev: false
+                },
+                
+                // Filters
+                searchQuery: '',
+                filterStatus: '',
+                filterCategory: '',
+                
+                // Selection
+                selectedVideos: [],
+                
+                // Modals
+                showCreateModal: false,
+                showDetailsModal: false,
+                selectedVideo: null,
+                
+                // Forms
+                newVideo: {
+                    title: '',
+                    description: '',
+                    primary_topic: '',
+                    category: 'AI Governance',
+                    target_audience: 'executives',
+                    content_type: 'thought_leadership',
+                    video_duration_seconds: null
+                },
+                creatingVideo: false,
+                
+                // Search debounce
+                searchTimeout: null,
+                
+                async init() {
+                    await this.loadStats();
+                    await this.loadVideos();
+                },
+                
+                async loadStats() {
+                    try {
+                        const response = await fetch('/api/youtube/optimization-status', {
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                const overview = data.overview;
+                                this.stats = {
+                                    total_videos: overview.total_videos,
+                                    optimized_videos: overview.status_breakdown?.completed || 0,
+                                    processing_videos: overview.status_breakdown?.optimizing || 0,
+                                    pending_optimization: overview.status_breakdown?.pending || 0,
+                                    avg_score: overview.average_optimization_score
+                                };
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading stats:', error);
+                    }
+                },
+                
+                async loadVideos() {
+                    this.loading = true;
+                    try {
+                        const params = new URLSearchParams({
+                            page: this.pagination.page,
+                            per_page: this.pagination.per_page
+                        });
+                        
+                        if (this.searchQuery) params.append('q', this.searchQuery);
+                        if (this.filterStatus) params.append('status', this.filterStatus);
+                        if (this.filterCategory) params.append('category', this.filterCategory);
+                        
+                        const url = this.searchQuery ? 
+                            `/api/youtube/search?${params}` : 
+                            `/api/youtube/videos?${params}`;
+                        
+                        const response = await fetch(url, {
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                this.videos = this.searchQuery ? data.results : data.videos;
+                                if (data.pagination) {
+                                    this.pagination = data.pagination;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading videos:', error);
+                        this.showNotification('Error loading videos', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                debounceSearch() {
+                    clearTimeout(this.searchTimeout);
+                    this.searchTimeout = setTimeout(() => {
+                        this.pagination.page = 1;
+                        this.loadVideos();
+                    }, 500);
+                },
+                
+                async createVideo() {
+                    if (!this.newVideo.title.trim()) return;
+                    
+                    this.creatingVideo = true;
+                    try {
+                        const response = await fetch('/api/youtube/videos', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify(this.newVideo)
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                this.showNotification('Video created successfully!', 'success');
+                                this.showCreateModal = false;
+                                this.resetNewVideo();
+                                await this.loadVideos();
+                                await this.loadStats();
+                            }
+                        } else {
+                            const error = await response.json();
+                            this.showNotification(error.error || 'Failed to create video', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error creating video:', error);
+                        this.showNotification('Error creating video', 'error');
+                    } finally {
+                        this.creatingVideo = false;
+                    }
+                },
+                
+                async optimizeVideo(videoId) {
+                    try {
+                        const response = await fetch(`/api/youtube/videos/${videoId}/optimize`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({ optimization_type: 'full' })
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                this.showNotification('Video optimization started!', 'success');
+                                await this.loadVideos();
+                                await this.loadStats();
+                            }
+                        } else {
+                            const error = await response.json();
+                            this.showNotification(error.error || 'Failed to optimize video', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error optimizing video:', error);
+                        this.showNotification('Error optimizing video', 'error');
+                    }
+                },
+                
+                async batchOptimize() {
+                    if (this.selectedVideos.length === 0) return;
+                    
+                    this.showNotification(`Starting optimization for ${this.selectedVideos.length} videos...`, 'info');
+                    
+                    for (const videoId of this.selectedVideos) {
+                        await this.optimizeVideo(videoId);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
+                    }
+                    
+                    this.selectedVideos = [];
+                },
+                
+                async deleteVideo(videoId) {
+                    if (!confirm('Are you sure you want to delete this video?')) return;
+                    
+                    try {
+                        const response = await fetch(`/api/youtube/videos/${videoId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            this.showNotification('Video deleted successfully', 'success');
+                            await this.loadVideos();
+                            await this.loadStats();
+                        }
+                    } catch (error) {
+                        console.error('Error deleting video:', error);
+                        this.showNotification('Error deleting video', 'error');
+                    }
+                },
+                
+                async viewVideo(video) {
+                    this.selectedVideo = video;
+                    this.showDetailsModal = true;
+                },
+                
+                changePage(page) {
+                    if (page >= 1 && page <= this.pagination.pages) {
+                        this.pagination.page = page;
+                        this.loadVideos();
+                    }
+                },
+                
+                resetNewVideo() {
+                    this.newVideo = {
+                        title: '',
+                        description: '',
+                        primary_topic: '',
+                        category: 'AI Governance',
+                        target_audience: 'executives',
+                        content_type: 'thought_leadership',
+                        video_duration_seconds: null
+                    };
+                },
+                
+                formatDuration(seconds) {
+                    if (!seconds) return 'Unknown';
+                    const mins = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                },
+                
+                formatDate(dateString) {
+                    return new Date(dateString).toLocaleDateString();
+                },
+                
+                get visiblePages() {
+                    const current = this.pagination.page;
+                    const total = this.pagination.pages;
+                    const delta = 2;
+                    
+                    let start = Math.max(1, current - delta);
+                    let end = Math.min(total, current + delta);
+                    
+                    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+                },
+                
+                showNotification(message, type = 'info') {
+                    // Simple notification system - you can replace with a proper toast library
+                    const notification = document.createElement('div');
+                    notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg text-white z-50 ${
+                        type === 'success' ? 'bg-green-600' : 
+                        type === 'error' ? 'bg-red-600' : 
+                        type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+                    }`;
+                    notification.textContent = message;
+                    document.body.appendChild(notification);
+                    
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 3000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

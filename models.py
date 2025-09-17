@@ -741,6 +741,383 @@ class OpportunityAnalysis(db.Model):
         }
 
 
+# ====================================
+# YouTube Video Optimization Models
+# ====================================
+
+class YoutubeVideo(db.Model):
+    __tablename__ = 'youtube_videos'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Video metadata
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    original_title: Mapped[str] = mapped_column(String(300), nullable=True)  # Before optimization
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    original_description: Mapped[str] = mapped_column(Text, nullable=True)  # Before optimization
+    
+    # Video file information
+    video_file_path: Mapped[str] = mapped_column(String(500), nullable=True)
+    video_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=True)
+    video_format: Mapped[str] = mapped_column(String(50), nullable=True)
+    video_size_mb: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # YouTube specific
+    youtube_video_id: Mapped[str] = mapped_column(String(100), nullable=True, unique=True)
+    youtube_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    youtube_status: Mapped[str] = mapped_column(String(50), default='draft')  # draft, uploaded, published, unlisted
+    
+    # SEO and categorization
+    primary_topic: Mapped[str] = mapped_column(String(200), nullable=True)
+    secondary_topics: Mapped[list] = mapped_column(JSON, nullable=True)
+    target_keywords: Mapped[list] = mapped_column(JSON, nullable=True)
+    seo_tags: Mapped[list] = mapped_column(JSON, nullable=True)
+    category: Mapped[str] = mapped_column(String(100), nullable=True)  # AI Governance, Accessibility, etc.
+    
+    # Content type and strategy
+    content_type: Mapped[str] = mapped_column(String(100), nullable=True)  # thought_leadership, tutorial, interview, etc.
+    target_audience: Mapped[str] = mapped_column(String(100), nullable=True)  # executives, compliance_officers, etc.
+    monetization_strategy: Mapped[list] = mapped_column(JSON, nullable=True)  # speaking_leads, consulting_leads, etc.
+    
+    # Optimization tracking
+    optimization_status: Mapped[str] = mapped_column(String(50), default='pending')  # pending, optimizing, completed, failed
+    optimization_score: Mapped[float] = mapped_column(Float, nullable=True)  # 0.0 to 1.0
+    perplexity_research_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Sales and lead generation
+    sales_links: Mapped[dict] = mapped_column(JSON, nullable=True)  # Strategic placement of sales links
+    call_to_action: Mapped[str] = mapped_column(Text, nullable=True)
+    lead_magnets: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    published_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    optimized_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'original_title': self.original_title,
+            'description': self.description,
+            'original_description': self.original_description,
+            'video_file_path': self.video_file_path,
+            'video_duration_seconds': self.video_duration_seconds,
+            'video_format': self.video_format,
+            'video_size_mb': self.video_size_mb,
+            'youtube_video_id': self.youtube_video_id,
+            'youtube_url': self.youtube_url,
+            'youtube_status': self.youtube_status,
+            'primary_topic': self.primary_topic,
+            'secondary_topics': self.secondary_topics or [],
+            'target_keywords': self.target_keywords or [],
+            'seo_tags': self.seo_tags or [],
+            'category': self.category,
+            'content_type': self.content_type,
+            'target_audience': self.target_audience,
+            'monetization_strategy': self.monetization_strategy or [],
+            'optimization_status': self.optimization_status,
+            'optimization_score': self.optimization_score,
+            'perplexity_research_used': self.perplexity_research_used,
+            'sales_links': self.sales_links or {},
+            'call_to_action': self.call_to_action,
+            'lead_magnets': self.lead_magnets or [],
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'published_at': self.published_at.isoformat() if self.published_at else None,
+            'optimized_at': self.optimized_at.isoformat() if self.optimized_at else None
+        }
+
+
+class VideoChapter(db.Model):
+    __tablename__ = 'video_chapters'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Relationship to video
+    video_id: Mapped[int] = mapped_column(Integer, nullable=False)  # Foreign key to YoutubeVideo
+    
+    # Chapter information
+    chapter_title: Mapped[str] = mapped_column(String(200), nullable=False)
+    start_time_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_time_seconds: Mapped[int] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # Chapter content and SEO
+    chapter_description: Mapped[str] = mapped_column(Text, nullable=True)
+    key_topics: Mapped[list] = mapped_column(JSON, nullable=True)
+    relevant_keywords: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Chapter ordering and importance
+    chapter_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    importance_score: Mapped[float] = mapped_column(Float, default=0.5)  # 0.0 to 1.0
+    
+    # AI generation metadata
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    perplexity_prompt_used: Mapped[str] = mapped_column(Text, nullable=True)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'video_id': self.video_id,
+            'chapter_title': self.chapter_title,
+            'start_time_seconds': self.start_time_seconds,
+            'end_time_seconds': self.end_time_seconds,
+            'duration_seconds': self.duration_seconds,
+            'chapter_description': self.chapter_description,
+            'key_topics': self.key_topics or [],
+            'relevant_keywords': self.relevant_keywords or [],
+            'chapter_order': self.chapter_order,
+            'importance_score': self.importance_score,
+            'ai_generated': self.ai_generated,
+            'perplexity_prompt_used': self.perplexity_prompt_used,
+            'confidence_score': self.confidence_score,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
+
+
+class VideoCaption(db.Model):
+    __tablename__ = 'video_captions'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Relationship to video
+    video_id: Mapped[int] = mapped_column(Integer, nullable=False)  # Foreign key to YoutubeVideo
+    
+    # Caption timing
+    start_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    # Caption content
+    original_text: Mapped[str] = mapped_column(Text, nullable=False)
+    optimized_text: Mapped[str] = mapped_column(Text, nullable=True)  # SEO optimized version
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # SEO optimization
+    contains_keywords: Mapped[list] = mapped_column(JSON, nullable=True)
+    seo_enhanced: Mapped[bool] = mapped_column(Boolean, default=False)
+    optimization_changes: Mapped[dict] = mapped_column(JSON, nullable=True)
+    
+    # Caption formatting and style
+    caption_style: Mapped[str] = mapped_column(String(50), default='standard')  # standard, highlight, emphasis
+    font_size: Mapped[str] = mapped_column(String(20), nullable=True)
+    position: Mapped[str] = mapped_column(String(50), nullable=True)  # bottom, top, center
+    
+    # AI processing metadata
+    ai_transcribed: Mapped[bool] = mapped_column(Boolean, default=False)
+    transcription_source: Mapped[str] = mapped_column(String(100), nullable=True)  # whisper, human, auto
+    reviewed_by_human: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'video_id': self.video_id,
+            'start_time_seconds': self.start_time_seconds,
+            'end_time_seconds': self.end_time_seconds,
+            'duration_seconds': self.duration_seconds,
+            'original_text': self.original_text,
+            'optimized_text': self.optimized_text,
+            'confidence_score': self.confidence_score,
+            'contains_keywords': self.contains_keywords or [],
+            'seo_enhanced': self.seo_enhanced,
+            'optimization_changes': self.optimization_changes or {},
+            'caption_style': self.caption_style,
+            'font_size': self.font_size,
+            'position': self.position,
+            'ai_transcribed': self.ai_transcribed,
+            'transcription_source': self.transcription_source,
+            'reviewed_by_human': self.reviewed_by_human,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
+
+
+class VideoOptimization(db.Model):
+    __tablename__ = 'video_optimizations'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Relationship to video
+    video_id: Mapped[int] = mapped_column(Integer, nullable=False)  # Foreign key to YoutubeVideo
+    
+    # Optimization run metadata
+    optimization_type: Mapped[str] = mapped_column(String(100), nullable=False)  # full, title_only, description_only, etc.
+    optimization_version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(50), default='pending')  # pending, running, completed, failed
+    
+    # AI model and prompt information
+    perplexity_model_used: Mapped[str] = mapped_column(String(100), nullable=True)
+    optimization_prompts: Mapped[dict] = mapped_column(JSON, nullable=True)
+    research_data_used: Mapped[dict] = mapped_column(JSON, nullable=True)
+    
+    # Optimization results
+    before_optimization: Mapped[dict] = mapped_column(JSON, nullable=True)  # Original content snapshot
+    after_optimization: Mapped[dict] = mapped_column(JSON, nullable=True)  # Optimized content
+    optimization_score: Mapped[float] = mapped_column(Float, nullable=True)  # Overall quality score
+    seo_improvements: Mapped[dict] = mapped_column(JSON, nullable=True)
+    
+    # Specific optimizations applied
+    title_optimized: Mapped[bool] = mapped_column(Boolean, default=False)
+    description_optimized: Mapped[bool] = mapped_column(Boolean, default=False)
+    tags_optimized: Mapped[bool] = mapped_column(Boolean, default=False)
+    chapters_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    captions_optimized: Mapped[bool] = mapped_column(Boolean, default=False)
+    sales_links_added: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Performance metrics
+    processing_time_seconds: Mapped[float] = mapped_column(Float, nullable=True)
+    api_calls_made: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Quality assessment
+    content_quality_score: Mapped[float] = mapped_column(Float, nullable=True)  # 0.0 to 1.0
+    seo_readiness_score: Mapped[float] = mapped_column(Float, nullable=True)  # 0.0 to 1.0
+    engagement_potential_score: Mapped[float] = mapped_column(Float, nullable=True)  # 0.0 to 1.0
+    monetization_alignment_score: Mapped[float] = mapped_column(Float, nullable=True)  # 0.0 to 1.0
+    
+    # Error handling
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # Timestamps
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'video_id': self.video_id,
+            'optimization_type': self.optimization_type,
+            'optimization_version': self.optimization_version,
+            'status': self.status,
+            'perplexity_model_used': self.perplexity_model_used,
+            'optimization_prompts': self.optimization_prompts or {},
+            'research_data_used': self.research_data_used or {},
+            'before_optimization': self.before_optimization or {},
+            'after_optimization': self.after_optimization or {},
+            'optimization_score': self.optimization_score,
+            'seo_improvements': self.seo_improvements or {},
+            'title_optimized': self.title_optimized,
+            'description_optimized': self.description_optimized,
+            'tags_optimized': self.tags_optimized,
+            'chapters_generated': self.chapters_generated,
+            'captions_optimized': self.captions_optimized,
+            'sales_links_added': self.sales_links_added,
+            'processing_time_seconds': self.processing_time_seconds,
+            'api_calls_made': self.api_calls_made,
+            'tokens_used': self.tokens_used,
+            'estimated_cost_usd': self.estimated_cost_usd,
+            'content_quality_score': self.content_quality_score,
+            'seo_readiness_score': self.seo_readiness_score,
+            'engagement_potential_score': self.engagement_potential_score,
+            'monetization_alignment_score': self.monetization_alignment_score,
+            'error_message': self.error_message,
+            'retry_count': self.retry_count,
+            'started_at': self.started_at.isoformat(),
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat()
+        }
+
+
+class VideoAnalytics(db.Model):
+    __tablename__ = 'video_analytics'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Relationship to video
+    video_id: Mapped[int] = mapped_column(Integer, nullable=False)  # Foreign key to YoutubeVideo
+    
+    # Analytics snapshot metadata
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    analytics_source: Mapped[str] = mapped_column(String(100), default='youtube_api')  # youtube_api, manual, estimated
+    
+    # YouTube performance metrics
+    views_total: Mapped[int] = mapped_column(Integer, default=0)
+    likes: Mapped[int] = mapped_column(Integer, default=0)
+    dislikes: Mapped[int] = mapped_column(Integer, default=0)
+    comments: Mapped[int] = mapped_column(Integer, default=0)
+    shares: Mapped[int] = mapped_column(Integer, default=0)
+    subscribers_gained: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # Engagement metrics
+    average_watch_time_seconds: Mapped[float] = mapped_column(Float, nullable=True)
+    watch_time_percentage: Mapped[float] = mapped_column(Float, nullable=True)  # % of video watched on average
+    engagement_rate: Mapped[float] = mapped_column(Float, nullable=True)  # likes+comments+shares/views
+    click_through_rate: Mapped[float] = mapped_column(Float, nullable=True)  # CTR from impressions
+    
+    # Discovery and reach
+    impressions: Mapped[int] = mapped_column(Integer, default=0)
+    impression_click_through_rate: Mapped[float] = mapped_column(Float, nullable=True)
+    traffic_sources: Mapped[dict] = mapped_column(JSON, nullable=True)  # youtube_search, suggested, external, etc.
+    top_keywords: Mapped[list] = mapped_column(JSON, nullable=True)  # Keywords driving traffic
+    
+    # Revenue and lead generation (estimated)
+    estimated_leads_generated: Mapped[int] = mapped_column(Integer, default=0)
+    website_clicks: Mapped[int] = mapped_column(Integer, default=0)
+    consultation_requests: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_revenue_impact: Mapped[float] = mapped_column(Float, default=0.0)
+    
+    # Content performance indicators
+    retention_curve: Mapped[dict] = mapped_column(JSON, nullable=True)  # Watch time at different timestamps
+    most_replayed_segments: Mapped[list] = mapped_column(JSON, nullable=True)
+    drop_off_points: Mapped[list] = mapped_column(JSON, nullable=True)
+    chapter_performance: Mapped[dict] = mapped_column(JSON, nullable=True)  # Performance by chapter
+    
+    # Optimization impact assessment
+    pre_optimization_baseline: Mapped[dict] = mapped_column(JSON, nullable=True)
+    optimization_impact_score: Mapped[float] = mapped_column(Float, nullable=True)  # Performance improvement
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'video_id': self.video_id,
+            'snapshot_date': self.snapshot_date.isoformat(),
+            'analytics_source': self.analytics_source,
+            'views_total': self.views_total,
+            'likes': self.likes,
+            'dislikes': self.dislikes,
+            'comments': self.comments,
+            'shares': self.shares,
+            'subscribers_gained': self.subscribers_gained,
+            'average_watch_time_seconds': self.average_watch_time_seconds,
+            'watch_time_percentage': self.watch_time_percentage,
+            'engagement_rate': self.engagement_rate,
+            'click_through_rate': self.click_through_rate,
+            'impressions': self.impressions,
+            'impression_click_through_rate': self.impression_click_through_rate,
+            'traffic_sources': self.traffic_sources or {},
+            'top_keywords': self.top_keywords or [],
+            'estimated_leads_generated': self.estimated_leads_generated,
+            'website_clicks': self.website_clicks,
+            'consultation_requests': self.consultation_requests,
+            'estimated_revenue_impact': self.estimated_revenue_impact,
+            'retention_curve': self.retention_curve or {},
+            'most_replayed_segments': self.most_replayed_segments or [],
+            'drop_off_points': self.drop_off_points or [],
+            'chapter_performance': self.chapter_performance or {},
+            'pre_optimization_baseline': self.pre_optimization_baseline or {},
+            'optimization_impact_score': self.optimization_impact_score,
+            'created_at': self.created_at.isoformat()
+        }
+
+
 class PerplexityAPIUsage(db.Model):
     __tablename__ = 'perplexity_api_usage'
     

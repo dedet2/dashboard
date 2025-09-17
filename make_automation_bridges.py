@@ -25,7 +25,19 @@ class AutomationBridgeService:
             'opportunity_update': self._handle_opportunity_update_trigger,
             'agent_performance': self._handle_agent_performance_trigger,
             'revenue_milestone': self._handle_revenue_milestone_trigger,
-            'schedule': self._handle_scheduled_trigger
+            'schedule': self._handle_scheduled_trigger,
+            # Klenty automation events
+            'klenty_email_sent': self._handle_klenty_email_sent,
+            'klenty_email_opened': self._handle_klenty_email_opened,
+            'klenty_email_clicked': self._handle_klenty_email_clicked,
+            'klenty_email_replied': self._handle_klenty_email_replied,
+            'klenty_lead_qualified': self._handle_klenty_lead_qualified,
+            'klenty_campaign_completed': self._handle_klenty_campaign_completed,
+            'klenty_sequence_completed': self._handle_klenty_sequence_completed,
+            # Cross-platform events
+            'cross_platform_lead_converted': self._handle_cross_platform_conversion,
+            'linkedin_to_klenty_sync': self._handle_linkedin_to_klenty_sync,
+            'klenty_to_linkedin_sync': self._handle_klenty_to_linkedin_sync
         }
     
     def execute_bridge(self, bridge_id: str, trigger_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -146,6 +158,56 @@ class AutomationBridgeService:
     def _handle_scheduled_trigger(self, schedule_data: Dict[str, Any]):
         """Handle scheduled triggers"""
         return self.handle_internal_event('schedule', schedule_data)
+    
+    # ===== KLENTY AUTOMATION EVENT HANDLERS =====
+    
+    def _handle_klenty_email_sent(self, event_data: Dict[str, Any]):
+        """Handle Klenty email sent events"""
+        return self.handle_internal_event('klenty_email_sent', event_data)
+    
+    def _handle_klenty_email_opened(self, event_data: Dict[str, Any]):
+        """Handle Klenty email opened events"""
+        return self.handle_internal_event('klenty_email_opened', event_data)
+    
+    def _handle_klenty_email_clicked(self, event_data: Dict[str, Any]):
+        """Handle Klenty email clicked events"""
+        return self.handle_internal_event('klenty_email_clicked', event_data)
+    
+    def _handle_klenty_email_replied(self, event_data: Dict[str, Any]):
+        """Handle Klenty email replied events"""
+        return self.handle_internal_event('klenty_email_replied', event_data)
+    
+    def _handle_klenty_lead_qualified(self, event_data: Dict[str, Any]):
+        """Handle Klenty lead qualified events"""
+        return self.handle_internal_event('klenty_lead_qualified', event_data)
+    
+    def _handle_klenty_campaign_completed(self, event_data: Dict[str, Any]):
+        """Handle Klenty campaign completed events"""
+        return self.handle_internal_event('klenty_campaign_completed', event_data)
+    
+    def _handle_klenty_sequence_completed(self, event_data: Dict[str, Any]):
+        """Handle Klenty sequence completed events"""
+        return self.handle_internal_event('klenty_sequence_completed', event_data)
+    
+    # ===== CROSS-PLATFORM INTEGRATION HANDLERS =====
+    
+    def _handle_cross_platform_conversion(self, event_data: Dict[str, Any]):
+        """Handle cross-platform lead conversion events"""
+        return self.handle_internal_event('cross_platform_lead_converted', event_data)
+    
+    def _handle_linkedin_to_klenty_sync(self, event_data: Dict[str, Any]):
+        """Handle LinkedIn to Klenty synchronization events"""
+        return self.handle_internal_event('linkedin_to_klenty_sync', event_data)
+    
+    def _handle_klenty_to_linkedin_sync(self, event_data: Dict[str, Any]):
+        """Handle Klenty to LinkedIn synchronization events"""
+        return self.handle_internal_event('klenty_to_linkedin_sync', event_data)
+    
+    # ===== CONVENIENCE METHODS FOR KLENTY INTEGRATION =====
+    
+    def trigger_event(self, event_type: str, event_data: Dict[str, Any], source_id: Optional[str] = None):
+        """Convenience method to trigger events from Klenty automation service"""
+        return self.handle_internal_event(event_type, event_data, source_id)
     
     def _evaluate_conditions(self, data: Dict[str, Any], conditions: Dict[str, Any]) -> bool:
         """Evaluate whether conditions are met for bridge execution"""

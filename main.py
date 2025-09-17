@@ -15,6 +15,9 @@ from dotenv import load_dotenv
 from sqlalchemy import func, desc
 from database import db, RevenueStream, AIAgent, HealthcareProvider, HealthcareAppointment, HealthMetric, ExecutiveOpportunity, SpeakingOpportunity, InterviewStage, CompensationBenchmark, RetreatEvent, KPIMetric, Milestone, EnergyTracking, WellnessGoal, WellnessAlert, WellnessMetric, WorkflowTrigger, BusinessRule, WorkflowAction, WorkflowSchedule, WorkflowExecution, NotificationChannel, WorkflowWebhook, BusinessEvent
 
+# Import YouTube optimization models from database.py
+from database import YoutubeVideo, VideoChapter, VideoCaption, VideoOptimization, VideoAnalytics
+
 # Import Make.com integration components
 try:
     from make_models import MakeScenario, MakeExecution, MakeEventLog, MakeAutomationBridge, MakeTemplate
@@ -96,6 +99,69 @@ except ImportError as e:
     create_content_service = None
     create_opportunity_analyzer = None
     create_ai_scorer = None
+
+# Import YouTube optimization service
+try:
+    from youtube_optimization_service import YoutubeVideoOptimizer, create_youtube_optimizer
+    logger.info("YouTube optimization service loaded successfully")
+except ImportError as e:
+    logger.warning(f"YouTube optimization service not available: {e}")
+    create_youtube_optimizer = None
+
+# Import YouTube Make.com integration
+try:
+    from youtube_make_integration import create_youtube_make_integration, register_youtube_make_webhooks
+    youtube_make_integration = create_youtube_make_integration(os.getenv('MAKE_WEBHOOK_URL'))
+    logger.info("YouTube Make.com integration loaded successfully")
+except ImportError as e:
+    logger.warning(f"YouTube Make.com integration not available: {e}")
+    youtube_make_integration = None
+
+# Import LoRA Digital Clone System
+try:
+    from lora_api_routes import lora_bp
+    from lora_deployment_system import create_deployment_system, LoRADeploymentManager
+    lora_deployment_manager = create_deployment_system()
+    logger.info("LoRA Digital Clone system loaded successfully")
+    lora_system_loaded = True
+except ImportError as e:
+    logger.warning(f"LoRA Digital Clone system not available: {e}")
+    lora_bp = None
+    lora_deployment_manager = None
+    lora_system_loaded = False
+
+# Import LinkedIn Sales Navigator Automation System
+try:
+    from linkedin_api_routes import linkedin_bp
+    from linkedin_automation_service import LinkedInAutomationService
+    from linkedin_qualification_engine import LinkedInQualificationEngine
+    from linkedin_outreach_workflows import OutreachWorkflowOrchestrator
+    from linkedin_pipeline_management import LinkedInPipelineManager
+    logger.info("LinkedIn Sales Navigator automation system loaded successfully")
+    linkedin_system_loaded = True
+except ImportError as e:
+    logger.warning(f"LinkedIn automation system not available: {e}")
+    linkedin_bp = None
+    linkedin_system_loaded = False
+
+# Import Klenty SDRx Outreach Automation System
+try:
+    from klenty_api_routes import klenty_bp, initialize_klenty_services
+    from klenty_automation_service import KlentyAutomationService, create_klenty_automation_service
+    from klenty_integration_workflows import KlentyIntegrationWorkflows, create_klenty_integration_workflows
+    from klenty_models import (
+        KlentyCampaign, KlentySequence, KlentyLead, KlentyTemplate, KlentyEmail,
+        KlentyAutomationRule, KlentyAnalytics
+    )
+    logger.info("Klenty SDRx outreach automation system loaded successfully")
+    klenty_system_loaded = True
+except ImportError as e:
+    logger.warning(f"Klenty automation system not available: {e}")
+    klenty_bp = None
+    initialize_klenty_services = None
+    create_klenty_automation_service = None
+    create_klenty_integration_workflows = None
+    klenty_system_loaded = False
 
 # API Base URLs
 APOLLO_BASE_URL = "https://api.apollo.io/v1"
@@ -390,6 +456,52 @@ if make_bp:
     logger.info("Make.com API blueprint registered successfully")
 else:
     logger.warning("Make.com integration not available - API routes not registered")
+
+# Register LoRA Digital Clone blueprint if available
+if lora_system_loaded and lora_bp:
+    app.register_blueprint(lora_bp)
+    logger.info("LoRA Digital Clone API blueprint registered successfully")
+else:
+    logger.warning("LoRA Digital Clone system not available - API routes not registered")
+
+# Register LinkedIn automation blueprint if available
+if linkedin_system_loaded and linkedin_bp:
+    app.register_blueprint(linkedin_bp)
+    logger.info("LinkedIn Sales Navigator automation API blueprint registered successfully")
+else:
+    logger.warning("LinkedIn automation system not available - API routes not registered")
+
+# Register Klenty automation blueprint if available
+if klenty_system_loaded and klenty_bp:
+    # Initialize Klenty services with proper dependencies
+    if linkedin_system_loaded and make_integration_loaded:
+        try:
+            # Get existing services
+            automation_bridge = create_automation_bridge_service() if create_automation_bridge_service else None
+            linkedin_service = LinkedInAutomationService() if linkedin_system_loaded else None
+            
+            # Initialize Klenty services
+            initialize_klenty_services(
+                apollo_api=create_apollo_wrapper() if 'create_apollo_wrapper' in globals() else None,
+                perplexity_api=create_perplexity_api() if create_perplexity_api else None,
+                linkedin_service=linkedin_service,
+                automation_bridge=automation_bridge
+            )
+            logger.info("Klenty services initialized successfully")
+        except Exception as e:
+            logger.warning(f"Error initializing Klenty services: {e}")
+    
+    app.register_blueprint(klenty_bp)
+    logger.info("Klenty SDRx automation API blueprint registered successfully")
+else:
+    logger.warning("Klenty automation system not available - API routes not registered")
+
+# Register YouTube Make.com webhooks
+if youtube_make_integration:
+    register_youtube_make_webhooks(app, youtube_make_integration)
+    logger.info("YouTube Make.com webhooks registered successfully")
+else:
+    logger.warning("YouTube Make.com integration not available - webhooks not registered")
 
 # Initialize Make.com integration (deferred to after app setup)
 def initialize_make_bridges():
@@ -2182,6 +2294,8 @@ DASHBOARD_HTML = """
     <title>Dr. Dede's RiskTravel Intelligence Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/js/linkedin-dashboard.js"></script>
     <style>
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
@@ -2290,6 +2404,7 @@ DASHBOARD_HTML = """
                     <button class="tab-btn py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600" data-tab="revenue">Revenue</button>
                     <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="agents">AI Agents</button>
                     <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="healthcare">Healthcare</button>
+                    <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="linkedin">LinkedIn</button>
                     <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="kpi">KPIs</button>
                 </nav>
             </div>
@@ -2331,6 +2446,223 @@ DASHBOARD_HTML = """
                             <h4 class="font-medium mb-3">Upcoming Appointments</h4>
                             <div id="appointmentsList" class="space-y-3">
                                 <!-- Appointments will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LinkedIn Tab -->
+                <div id="linkedin-tab" class="tab-content hidden">
+                    <div id="linkedinDashboard">
+                        <!-- LinkedIn Dashboard Header -->
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold">LinkedIn Sales Navigator Automation</h3>
+                            <div class="flex space-x-3">
+                                <button id="refreshLinkedInBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                                    <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"></path>
+                                    </svg>
+                                    Refresh
+                                </button>
+                                <button id="processAutomationBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                                    <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
+                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Process Automation
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- LinkedIn Dashboard Summary -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+                                <div class="flex items-center">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-600">Total Leads</p>
+                                        <p class="text-2xl font-bold text-gray-900" id="totalLeads">0</p>
+                                    </div>
+                                    <div class="p-3 bg-blue-100 rounded-full">
+                                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6z"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+                                <div class="flex items-center">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-600">Qualified Leads</p>
+                                        <p class="text-2xl font-bold text-gray-900" id="qualifiedLeads">0</p>
+                                    </div>
+                                    <div class="p-3 bg-green-100 rounded-full">
+                                        <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500">
+                                <div class="flex items-center">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-600">Response Rate</p>
+                                        <p class="text-2xl font-bold text-gray-900" id="responseRate">0%</p>
+                                    </div>
+                                    <div class="p-3 bg-yellow-100 rounded-full">
+                                        <svg class="w-6 h-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
+                                <div class="flex items-center">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-600">Conversion Rate</p>
+                                        <p class="text-2xl font-bold text-gray-900" id="conversionRate">0%</p>
+                                    </div>
+                                    <div class="p-3 bg-purple-100 rounded-full">
+                                        <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- LinkedIn Dashboard Tabs -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="border-b border-gray-200">
+                                <nav class="-mb-px flex space-x-8 px-6">
+                                    <button class="linkedin-tab-btn py-3 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600" data-tab="overview">Overview</button>
+                                    <button class="linkedin-tab-btn py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="campaigns">Campaigns</button>
+                                    <button class="linkedin-tab-btn py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="leads">Leads</button>
+                                    <button class="linkedin-tab-btn py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="pipeline">Pipeline</button>
+                                    <button class="linkedin-tab-btn py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="analytics">Analytics</button>
+                                </nav>
+                            </div>
+
+                            <div class="p-6">
+                                <!-- Overview Tab -->
+                                <div id="overviewTab" class="linkedin-tab-content">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Priority Leads -->
+                                        <div>
+                                            <h4 class="font-semibold text-lg mb-4">Priority Leads</h4>
+                                            <div id="priorityLeadsContainer" class="space-y-3 max-h-96 overflow-y-auto">
+                                                <!-- Priority leads will be loaded here -->
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Active Alerts -->
+                                        <div>
+                                            <h4 class="font-semibold text-lg mb-4">Active Alerts</h4>
+                                            <div id="alertsContainer" class="space-y-3 max-h-96 overflow-y-auto">
+                                                <!-- Alerts will be loaded here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Pipeline Breakdown -->
+                                    <div class="mt-6">
+                                        <h4 class="font-semibold text-lg mb-4">Pipeline Breakdown</h4>
+                                        <div id="pipelineBreakdown" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                                            <!-- Pipeline stages will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Campaigns Tab -->
+                                <div id="campaignsTab" class="linkedin-tab-content hidden">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h4 class="font-semibold text-lg">LinkedIn Campaigns</h4>
+                                        <button id="createCampaignBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Create Campaign</button>
+                                    </div>
+                                    
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Leads</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connections</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Responses</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response Rate</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="campaignsTableBody" class="bg-white divide-y divide-gray-200">
+                                                <!-- Campaigns will be loaded here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Leads Tab -->
+                                <div id="leadsTab" class="linkedin-tab-content hidden">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <div class="flex items-center space-x-4">
+                                            <h4 class="font-semibold text-lg">Campaign Leads</h4>
+                                            <select id="campaignSelect" class="border border-gray-300 rounded-lg px-3 py-2">
+                                                <option value="">Select Campaign</option>
+                                            </select>
+                                        </div>
+                                        <button id="discoverLeadsBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Discover Leads</button>
+                                    </div>
+                                    
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="leadsTableBody" class="bg-white divide-y divide-gray-200">
+                                                <!-- Leads will be loaded here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Pipeline Tab -->
+                                <div id="pipelineTab" class="linkedin-tab-content hidden">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div>
+                                            <h4 class="font-semibold text-lg mb-4">Conversion Funnel</h4>
+                                            <div class="bg-gray-50 p-4 rounded-lg">
+                                                <canvas id="conversionFunnelChart" width="400" height="300"></canvas>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-lg mb-4">Pipeline Trends</h4>
+                                            <div class="bg-gray-50 p-4 rounded-lg">
+                                                <canvas id="pipelineTrendsChart" width="400" height="300"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Analytics Tab -->
+                                <div id="analyticsTab" class="linkedin-tab-content hidden">
+                                    <h4 class="font-semibold text-lg mb-4">Performance Analytics</h4>
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div class="bg-gray-50 p-4 rounded-lg">
+                                            <canvas id="performanceChart" width="400" height="300"></canvas>
+                                        </div>
+                                        <div class="bg-gray-50 p-4 rounded-lg">
+                                            <canvas id="workflowChart" width="400" height="300"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2951,6 +3283,95 @@ DASHBOARD_HTML = """
                 </div>
             `).join('');
         }
+        
+        // LinkedIn Tab Management
+        function initializeLinkedInTabs() {
+            const linkedinTabBtns = document.querySelectorAll('.linkedin-tab-btn');
+            const linkedinTabContents = document.querySelectorAll('.linkedin-tab-content');
+            
+            linkedinTabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Update active tab button
+                    linkedinTabBtns.forEach(b => {
+                        b.classList.remove('border-blue-500', 'text-blue-600');
+                        b.classList.add('border-transparent', 'text-gray-500');
+                    });
+                    btn.classList.remove('border-transparent', 'text-gray-500');
+                    btn.classList.add('border-blue-500', 'text-blue-600');
+                    
+                    // Update visible tab content
+                    const targetTab = btn.getAttribute('data-tab');
+                    linkedinTabContents.forEach(content => {
+                        content.classList.add('hidden');
+                    });
+                    
+                    const targetContent = document.getElementById(targetTab + 'Tab');
+                    if (targetContent) {
+                        targetContent.classList.remove('hidden');
+                    }
+                });
+            });
+        }
+        
+        // Initialize LinkedIn dashboard when tab is selected
+        function initializeLinkedInDashboard() {
+            if (window.LinkedInDashboard) {
+                window.linkedInDashboard = new window.LinkedInDashboard();
+            }
+        }
+        
+        // Override existing tab switching to handle LinkedIn
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            // Show selected tab
+            const selectedTab = document.getElementById(tabName + '-tab');
+            if (selectedTab) {
+                selectedTab.classList.remove('hidden');
+            }
+            
+            // Update selected tab button
+            const selectedBtn = document.querySelector(`[data-tab="${tabName}"]`);
+            if (selectedBtn) {
+                selectedBtn.classList.remove('border-transparent', 'text-gray-500');
+                selectedBtn.classList.add('border-blue-500', 'text-blue-600');
+            }
+            
+            // Initialize LinkedIn dashboard if LinkedIn tab is selected
+            if (tabName === 'linkedin') {
+                setTimeout(() => {
+                    initializeLinkedInTabs();
+                    initializeLinkedInDashboard();
+                }, 100);
+            }
+        }
+        
+        // Initialize everything when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing initialization code...
+            
+            // Add LinkedIn tab event listener
+            const linkedinTab = document.querySelector('[data-tab="linkedin"]');
+            if (linkedinTab) {
+                linkedinTab.addEventListener('click', () => {
+                    switchTab('linkedin');
+                });
+            }
+            
+            // Initialize LinkedIn dashboard immediately if on LinkedIn tab
+            if (window.location.hash === '#linkedin') {
+                switchTab('linkedin');
+            }
+        });
     </script>
 </body>
 </html>
@@ -3009,6 +3430,367 @@ def login():
         logger.error(f"Login error: {e}")
         return jsonify({"error": "Login failed"}), 500
 
+# ====================================
+# YouTube Video Optimization API Routes
+# ====================================
+
+@app.route('/api/youtube/videos', methods=['GET'])
+@jwt_required()
+def get_youtube_videos():
+    """Get all YouTube videos with optional filtering and pagination"""
+    try:
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        status = request.args.get('status')  # draft, optimizing, completed, etc.
+        category = request.args.get('category')  # AI Governance, Accessibility, etc.
+        
+        # Build query
+        query = YoutubeVideo.query
+        
+        if status:
+            query = query.filter(YoutubeVideo.optimization_status == status)
+        if category:
+            query = query.filter(YoutubeVideo.category == category)
+        
+        # Execute paginated query
+        videos = query.order_by(YoutubeVideo.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'success': True,
+            'videos': [video.to_dict() for video in videos.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': videos.total,
+                'pages': videos.pages,
+                'has_next': videos.has_next,
+                'has_prev': videos.has_prev
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching YouTube videos: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos', methods=['POST'])
+@jwt_required()
+def create_youtube_video():
+    """Create a new YouTube video record"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('title'):
+            return jsonify({'success': False, 'error': 'Title is required'}), 400
+        
+        # Create video record
+        video = YoutubeVideo(
+            title=data['title'],
+            description=data.get('description', ''),
+            primary_topic=data.get('primary_topic', 'AI Governance'),
+            secondary_topics=data.get('secondary_topics', []),
+            target_keywords=data.get('target_keywords', []),
+            category=data.get('category', 'AI Governance'),
+            content_type=data.get('content_type', 'thought_leadership'),
+            target_audience=data.get('target_audience', 'executives'),
+            video_duration_seconds=data.get('video_duration_seconds'),
+            video_file_path=data.get('video_file_path'),
+            video_format=data.get('video_format'),
+            video_size_mb=data.get('video_size_mb')
+        )
+        
+        db.session.add(video)
+        db.session.commit()
+        
+        logger.info(f"Created YouTube video: {video.id} - {video.title}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Video created successfully',
+            'video': video.to_dict()
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creating YouTube video: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos/<int:video_id>', methods=['GET'])
+@jwt_required()
+def get_youtube_video(video_id):
+    """Get specific YouTube video with chapters, captions, and optimization data"""
+    try:
+        video = YoutubeVideo.query.get_or_404(video_id)
+        
+        # Get related data
+        chapters = VideoChapter.query.filter_by(video_id=video_id).order_by(VideoChapter.chapter_order).all()
+        captions = VideoCaption.query.filter_by(video_id=video_id).order_by(VideoCaption.start_time_seconds).limit(50).all()
+        optimizations = VideoOptimization.query.filter_by(video_id=video_id).order_by(VideoOptimization.created_at.desc()).all()
+        analytics = VideoAnalytics.query.filter_by(video_id=video_id).order_by(VideoAnalytics.snapshot_date.desc()).limit(10).all()
+        
+        return jsonify({
+            'success': True,
+            'video': video.to_dict(),
+            'chapters': [chapter.to_dict() for chapter in chapters],
+            'captions_sample': [caption.to_dict() for caption in captions],
+            'optimizations': [opt.to_dict() for opt in optimizations],
+            'analytics': [analytic.to_dict() for analytic in analytics]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching YouTube video {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos/<int:video_id>/optimize', methods=['POST'])
+@jwt_required()
+def optimize_youtube_video(video_id):
+    """Run optimization pipeline on a YouTube video"""
+    try:
+        # Validate video exists
+        video = YoutubeVideo.query.get_or_404(video_id)
+        
+        # Get optimization parameters
+        data = request.get_json() or {}
+        optimization_type = data.get('optimization_type', 'full')  # full, title_only, description_only, chapters, sales_links
+        
+        # Check if optimization service is available
+        if not create_youtube_optimizer:
+            return jsonify({
+                'success': False,
+                'error': 'YouTube optimization service not available'
+            }), 503
+        
+        # Initialize optimizer
+        optimizer = create_youtube_optimizer()
+        
+        # Run optimization
+        result = optimizer.optimize_video_complete(video_id, optimization_type)
+        
+        if result.get('status') == 'completed':
+            return jsonify({
+                'success': True,
+                'message': 'Video optimization completed successfully',
+                'optimization_result': result
+            })
+        elif result.get('status') == 'failed':
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Optimization failed'),
+                'optimization_result': result
+            }), 500
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'Video optimization in progress',
+                'optimization_result': result
+            })
+        
+    except Exception as e:
+        logger.error(f"Error optimizing YouTube video {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos/<int:video_id>/chapters', methods=['GET'])
+@jwt_required()
+def get_video_chapters(video_id):
+    """Get all chapters for a video"""
+    try:
+        video = YoutubeVideo.query.get_or_404(video_id)
+        chapters = VideoChapter.query.filter_by(video_id=video_id).order_by(VideoChapter.chapter_order).all()
+        
+        return jsonify({
+            'success': True,
+            'video_id': video_id,
+            'video_title': video.title,
+            'chapters': [chapter.to_dict() for chapter in chapters]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching chapters for video {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos/<int:video_id>/chapters', methods=['POST'])
+@jwt_required()
+def create_video_chapter(video_id):
+    """Create a new chapter for a video"""
+    try:
+        video = YoutubeVideo.query.get_or_404(video_id)
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['chapter_title', 'start_time_seconds', 'chapter_order']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'error': f'{field} is required'}), 400
+        
+        # Create chapter
+        chapter = VideoChapter(
+            video_id=video_id,
+            chapter_title=data['chapter_title'],
+            start_time_seconds=data['start_time_seconds'],
+            end_time_seconds=data.get('end_time_seconds'),
+            duration_seconds=data.get('duration_seconds'),
+            chapter_order=data['chapter_order'],
+            chapter_description=data.get('chapter_description', ''),
+            key_topics=data.get('key_topics', []),
+            relevant_keywords=data.get('relevant_keywords', []),
+            importance_score=data.get('importance_score', 0.5)
+        )
+        
+        db.session.add(chapter)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Chapter created successfully',
+            'chapter': chapter.to_dict()
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creating chapter for video {video_id}: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos/<int:video_id>/captions', methods=['GET'])
+@jwt_required()
+def get_video_captions(video_id):
+    """Get captions for a video with pagination"""
+    try:
+        video = YoutubeVideo.query.get_or_404(video_id)
+        
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 100, type=int), 500)
+        
+        # Get captions with pagination
+        captions = VideoCaption.query.filter_by(video_id=video_id).order_by(
+            VideoCaption.start_time_seconds
+        ).paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'success': True,
+            'video_id': video_id,
+            'video_title': video.title,
+            'captions': [caption.to_dict() for caption in captions.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': captions.total,
+                'pages': captions.pages,
+                'has_next': captions.has_next,
+                'has_prev': captions.has_prev
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching captions for video {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/videos/<int:video_id>/analytics', methods=['GET'])
+@jwt_required()
+def get_video_analytics(video_id):
+    """Get analytics data for a video"""
+    try:
+        video = YoutubeVideo.query.get_or_404(video_id)
+        
+        # Get recent analytics
+        analytics = VideoAnalytics.query.filter_by(video_id=video_id).order_by(
+            VideoAnalytics.snapshot_date.desc()
+        ).limit(30).all()
+        
+        # Calculate summary metrics
+        latest_analytics = analytics[0] if analytics else None
+        
+        summary = {
+            'total_views': latest_analytics.views_total if latest_analytics else 0,
+            'engagement_rate': latest_analytics.engagement_rate if latest_analytics else 0.0,
+            'average_watch_time': latest_analytics.average_watch_time_seconds if latest_analytics else 0.0,
+            'estimated_leads': latest_analytics.estimated_leads_generated if latest_analytics else 0,
+            'optimization_impact': latest_analytics.optimization_impact_score if latest_analytics else None
+        }
+        
+        return jsonify({
+            'success': True,
+            'video_id': video_id,
+            'video_title': video.title,
+            'summary': summary,
+            'analytics': [analytic.to_dict() for analytic in analytics]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching analytics for video {video_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/optimization-status', methods=['GET'])
+@jwt_required()
+def get_optimization_status():
+    """Get overview of video optimization status across all videos"""
+    try:
+        # Get optimization statistics
+        total_videos = YoutubeVideo.query.count()
+        
+        # Count by status
+        status_counts = db.session.query(
+            YoutubeVideo.optimization_status,
+            func.count(YoutubeVideo.id)
+        ).group_by(YoutubeVideo.optimization_status).all()
+        
+        # Get recent optimizations
+        recent_optimizations = VideoOptimization.query.order_by(
+            VideoOptimization.completed_at.desc()
+        ).limit(10).all()
+        
+        # Calculate average scores
+        avg_optimization_score = db.session.query(
+            func.avg(YoutubeVideo.optimization_score)
+        ).filter(YoutubeVideo.optimization_score.isnot(None)).scalar() or 0.0
+        
+        return jsonify({
+            'success': True,
+            'overview': {
+                'total_videos': total_videos,
+                'average_optimization_score': round(avg_optimization_score, 3),
+                'status_breakdown': dict(status_counts),
+                'perplexity_api_available': create_youtube_optimizer is not None
+            },
+            'recent_optimizations': [opt.to_dict() for opt in recent_optimizations]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching optimization status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/youtube/search', methods=['GET'])
+@jwt_required()
+def search_youtube_videos():
+    """Search YouTube videos by title, description, or keywords"""
+    try:
+        query_term = request.args.get('q', '').strip()
+        if not query_term:
+            return jsonify({'success': False, 'error': 'Query parameter "q" is required'}), 400
+        
+        # Search in title, description, and keywords
+        videos = YoutubeVideo.query.filter(
+            db.or_(
+                YoutubeVideo.title.ilike(f'%{query_term}%'),
+                YoutubeVideo.description.ilike(f'%{query_term}%'),
+                YoutubeVideo.primary_topic.ilike(f'%{query_term}%')
+            )
+        ).order_by(YoutubeVideo.created_at.desc()).limit(20).all()
+        
+        return jsonify({
+            'success': True,
+            'query': query_term,
+            'results': [video.to_dict() for video in videos],
+            'count': len(videos)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error searching YouTube videos: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # Dashboard routes
 @app.route('/dashboard')
 @app.route('/dashboard/')
@@ -3018,6 +3800,11 @@ def dashboard():
 @app.route('/executive-pipeline')
 def executive_pipeline():
     return render_template('executive_pipeline.html')
+
+@app.route('/youtube')
+@app.route('/youtube/')
+def youtube_dashboard():
+    return render_template('youtube_dashboard.html')
 
 @app.route('/')
 def index():
@@ -3035,11 +3822,31 @@ def workflow_dashboard():
     """Serve the Workflow Automation Dashboard"""
     return render_template('workflow_dashboard.html')
 
+@app.route('/lora')
+@app.route('/lora/')
+@app.route('/digital-clones')
+@app.route('/digital-clones/')
+def lora_dashboard():
+    """Serve the LoRA Digital Clone Development Dashboard"""
+    return render_template('lora_clone_dashboard.html')
+
 @app.route('/make')
 @app.route('/make/')
 def make_dashboard():
     """Serve the Make.com Workflow Automation Dashboard"""
     return render_template('make_dashboard.html')
+
+@app.route('/klenty')
+@app.route('/klenty/')
+def klenty_dashboard():
+    """Serve the Klenty SDRx Outreach Automation Dashboard"""
+    return render_template('klenty_dashboard.html')
+
+@app.route('/linkedin')
+@app.route('/linkedin/')
+def linkedin_dashboard():
+    """Serve the LinkedIn Sales Navigator Automation Dashboard"""
+    return render_template('linkedin_dashboard.html')
 
 @app.route('/api/dashboard/overview', methods=['GET'])
 @jwt_required()

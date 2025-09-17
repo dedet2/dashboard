@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klenty SDRx Outreach Automation - AI Empire</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .tab-active {
+            border-bottom: 2px solid #6366f1;
+            color: #6366f1;
+            background-color: #f0f9ff;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold text-gray-900">Klenty SDRx Automation</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="refreshKlentyBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                    <button id="logoutBtn" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Campaign Selection -->
+        <div class="mb-6">
+            <div class="bg-white shadow rounded-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <label for="klentyCampaignSelect" class="text-sm font-medium text-gray-700">Active Campaign:</label>
+                        <select id="klentyCampaignSelect" class="border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">Select a campaign...</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="createKlentyCampaignBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-plus mr-2"></i>New Campaign
+                        </button>
+                        <button id="sendScheduledEmailsBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-paper-plane mr-2"></i>Send Emails
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button data-tab="overview" class="klenty-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600 bg-indigo-50">
+                        Overview
+                    </button>
+                    <button data-tab="campaigns" class="klenty-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Campaigns
+                    </button>
+                    <button data-tab="sequences" class="klenty-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Sequences
+                    </button>
+                    <button data-tab="leads" class="klenty-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Leads
+                    </button>
+                    <button data-tab="analytics" class="klenty-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Analytics
+                    </button>
+                    <button data-tab="integration" class="klenty-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Integration
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        
+        <!-- Overview Tab -->
+        <div id="overviewTab" class="klenty-tab-content">
+            <div id="dashboard-loading" class="hidden flex justify-center items-center py-8">
+                <div class="loading-spinner"></div>
+                <span class="ml-2 text-gray-600">Loading dashboard data...</span>
+            </div>
+            <div id="overviewContainer">
+                <!-- Overview content will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Campaigns Tab -->
+        <div id="campaignsTab" class="klenty-tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Email Campaigns</h3>
+                </div>
+                <div class="p-6">
+                    <div id="campaignsContainer">
+                        <!-- Campaigns table will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sequences Tab -->
+        <div id="sequencesTab" class="klenty-tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900">Email Sequences</h3>
+                    <button id="createSequenceBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-plus mr-2"></i>Create Sequence
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="sequencesContainer">
+                        <!-- Sequences content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leads Tab -->
+        <div id="leadsTab" class="klenty-tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900">Leads & Prospects</h3>
+                    <div class="space-x-2">
+                        <button id="importLeadsBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-upload mr-2"></i>Import Leads
+                        </button>
+                        <button id="syncLinkedInLeadsBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fab fa-linkedin mr-2"></i>Sync LinkedIn
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div id="leadsContainer">
+                        <!-- Leads content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analyticsTab" class="klenty-tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Campaign Analytics</h3>
+                </div>
+                <div class="p-6">
+                    <div id="analyticsContainer">
+                        <!-- Analytics content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integration Tab -->
+        <div id="integrationTab" class="klenty-tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900">Cross-Platform Integration</h3>
+                    <button id="processResponsesBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-sync mr-2"></i>Process Responses
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div id="integrationContainer">
+                        <!-- Integration content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Create Campaign Modal -->
+    <div id="createKlentyCampaignModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Create Email Campaign</h3>
+                    <button id="closeKlentyCampaignModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="createKlentyCampaignForm" class="space-y-4">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700">Campaign Name</label>
+                        <input type="text" name="name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea name="description" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="sender_email" class="block text-sm font-medium text-gray-700">Sender Email</label>
+                            <input type="email" name="sender_email" required value="dede@risktravel.com" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="sender_name" class="block text-sm font-medium text-gray-700">Sender Name</label>
+                            <input type="text" name="sender_name" required value="Dr. Dede" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="industries" class="block text-sm font-medium text-gray-700">Target Industries (comma-separated)</label>
+                        <input type="text" name="industries" placeholder="Technology, Healthcare, Finance" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="job_titles" class="block text-sm font-medium text-gray-700">Target Job Titles (comma-separated)</label>
+                        <input type="text" name="job_titles" placeholder="CEO, CTO, VP Engineering" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="daily_email_limit" class="block text-sm font-medium text-gray-700">Daily Email Limit</label>
+                            <input type="number" name="daily_email_limit" value="100" min="1" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="weekly_email_limit" class="block text-sm font-medium text-gray-700">Weekly Email Limit</label>
+                            <input type="number" name="weekly_email_limit" value="500" min="1" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" id="cancelCreateCampaign" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">Create Campaign</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Sequence Modal -->
+    <div id="createSequenceModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Create Email Sequence</h3>
+                    <button id="closeSequenceModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="createSequenceForm" class="space-y-4">
+                    <div>
+                        <label for="sequence_name" class="block text-sm font-medium text-gray-700">Sequence Name</label>
+                        <input type="text" name="sequence_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label for="delay_between_emails" class="block text-sm font-medium text-gray-700">Days Between Emails</label>
+                            <input type="number" name="delay_between_emails" value="3" min="1" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" name="stop_on_reply" checked class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <label for="stop_on_reply" class="ml-2 block text-sm text-gray-900">Stop on Reply</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" name="stop_on_unsubscribe" checked class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <label for="stop_on_unsubscribe" class="ml-2 block text-sm text-gray-900">Stop on Unsubscribe</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Email Templates Section -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Email Templates</h4>
+                        <div id="emailTemplatesContainer">
+                            <!-- Initial template -->
+                            <div class="border border-gray-200 rounded-lg p-4 mb-4 template-item">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h5 class="text-sm font-medium text-gray-700">Email 1 (Initial Contact)</h5>
+                                    <button type="button" class="text-red-600 hover:text-red-800 remove-template" style="display: none;">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Subject Line</label>
+                                        <input type="text" name="template_subject_1" required placeholder="Quick question about {{company}}'s AI strategy" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Email Body</label>
+                                        <textarea name="template_body_1" rows="4" required placeholder="Hi {{first_name}},&#10;&#10;I hope this email finds you well..." class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Delay (days after previous email)</label>
+                                        <input type="number" name="template_delay_1" value="0" min="0" class="mt-1 block w-20 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" id="addTemplateBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm">
+                            <i class="fas fa-plus mr-2"></i>Add Email Template
+                        </button>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">Create Sequence</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Leads Modal -->
+    <div id="importLeadsModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Import Leads</h3>
+                    <button id="closeImportLeadsModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="importLeadsForm" class="space-y-4">
+                    <div>
+                        <label for="leads_file" class="block text-sm font-medium text-gray-700">Upload CSV File</label>
+                        <input type="file" name="leads_file" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                        <p class="mt-1 text-xs text-gray-500">Required columns: email, first_name, last_name. Optional: company, title, phone</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex items-center">
+                            <input type="checkbox" name="auto_enrich" checked class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <label for="auto_enrich" class="ml-2 block text-sm text-gray-900">Auto-enrich with Apollo</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" name="auto_score" checked class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <label for="auto_score" class="ml-2 block text-sm text-gray-900">Auto-score leads</label>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md">Import Leads</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync LinkedIn Modal -->
+    <div id="syncLinkedInModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Sync LinkedIn Leads</h3>
+                    <button id="closeSyncLinkedInModal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="syncLinkedInForm" class="space-y-4">
+                    <div>
+                        <label for="linkedin_campaign_id" class="block text-sm font-medium text-gray-700">LinkedIn Campaign</label>
+                        <select name="linkedin_campaign_id" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">Select LinkedIn campaign...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="qualification_threshold" class="block text-sm font-medium text-gray-700">Minimum Lead Score</label>
+                        <input type="number" name="qualification_threshold" value="70" min="0" max="100" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="mt-1 text-xs text-gray-500">Only leads with this score or higher will be synced</p>
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">Sync Leads</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicators -->
+    <div id="send-emails-loading" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-1/2 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="flex items-center justify-center">
+                <div class="loading-spinner mr-3"></div>
+                <span class="text-gray-700">Sending scheduled emails...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/klenty-dashboard.js"></script>
+</body>
+</html>

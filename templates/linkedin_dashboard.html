@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Sales Navigator Automation Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #0077B5 0%, #00A0DC 100%); }
+        .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
+        .leads-card { background: linear-gradient(135deg, #0077B5 0%, #005885 100%); }
+        .campaigns-card { background: linear-gradient(135deg, #00A0DC 0%, #0077B5 100%); }
+        .pipeline-card { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .engagement-card { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .chart-container { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .linkedin-tab-btn.active { border-color: #0077B5; color: #0077B5; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white p-4 shadow-lg sticky top-0 z-40">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">🔗 LinkedIn Sales Navigator Automation</h1>
+            <div class="flex space-x-4 items-center">
+                <a href="/bi-dashboard" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors inline-flex items-center">
+                    📊 BI Dashboard
+                </a>
+                <button id="createCampaignBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors">
+                    ➕ New Campaign
+                </button>
+                <button id="refreshLinkedInBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                    🔄 Refresh Data
+                </button>
+                <button id="logoutBtn" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Error Alert -->
+    <div id="errorAlert" class="hidden fixed top-20 right-4 bg-red-500 text-white px-6 py-4 rounded-lg shadow-lg z-50">
+        <div class="flex items-center">
+            <span id="errorMessage">An error occurred</span>
+            <button onclick="hideError()" class="ml-4 text-white hover:text-gray-200">×</button>
+        </div>
+    </div>
+
+    <!-- Success Alert -->
+    <div id="successAlert" class="hidden fixed top-20 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg z-50">
+        <div class="flex items-center">
+            <span id="successMessage">Operation successful</span>
+            <button onclick="hideSuccess()" class="ml-4 text-white hover:text-gray-200">×</button>
+        </div>
+    </div>
+
+    <!-- Dashboard Overview Cards -->
+    <div class="container mx-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Leads Card -->
+            <div class="leads-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Total Leads</p>
+                        <p class="text-3xl font-bold" id="totalLeads">0</p>
+                        <p class="text-sm opacity-75" id="leadsGrowth">This month</p>
+                    </div>
+                    <div class="text-4xl opacity-75">👥</div>
+                </div>
+            </div>
+
+            <!-- Active Campaigns Card -->
+            <div class="campaigns-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Active Campaigns</p>
+                        <p class="text-3xl font-bold" id="activeCampaigns">0</p>
+                        <p class="text-sm opacity-75" id="campaignsRunning">Currently running</p>
+                    </div>
+                    <div class="text-4xl opacity-75">🚀</div>
+                </div>
+            </div>
+
+            <!-- Qualified Leads Card -->
+            <div class="pipeline-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Qualified Leads</p>
+                        <p class="text-3xl font-bold" id="qualifiedLeads">0</p>
+                        <p class="text-sm opacity-75" id="qualificationRate">Qualification rate</p>
+                    </div>
+                    <div class="text-4xl opacity-75">✅</div>
+                </div>
+            </div>
+
+            <!-- Response Rate Card -->
+            <div class="engagement-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Response Rate</p>
+                        <p class="text-3xl font-bold" id="responseRate">0%</p>
+                        <p class="text-sm opacity-75" id="conversionRate">Conversion rate</p>
+                    </div>
+                    <div class="text-4xl opacity-75">💬</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Campaign Selector -->
+        <div class="bg-white p-4 rounded-lg shadow mb-6">
+            <div class="flex items-center space-x-4">
+                <label for="campaignSelect" class="text-sm font-medium text-gray-700">Filter by Campaign:</label>
+                <select id="campaignSelect" class="flex-1 max-w-md p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Campaigns</option>
+                </select>
+                <div class="text-sm text-gray-500">
+                    Pipeline Value: <span class="font-bold text-gray-900" id="revenuePipeline">$0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Tabs -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8 px-6">
+                    <button class="linkedin-tab-btn py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600 active" data-tab="overview">Overview</button>
+                    <button class="linkedin-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="campaigns">Campaigns</button>
+                    <button class="linkedin-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="leads">Leads</button>
+                    <button class="linkedin-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="pipeline">Pipeline</button>
+                    <button class="linkedin-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="analytics">Analytics</button>
+                    <button class="linkedin-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="workflows">Workflows</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Overview Tab -->
+                <div id="overviewTab" class="linkedin-tab-content">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Pipeline Breakdown -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Pipeline Breakdown</h3>
+                            <div id="pipelineBreakdown" class="grid grid-cols-2 gap-4">
+                                <!-- Dynamic pipeline stage cards -->
+                            </div>
+                        </div>
+
+                        <!-- Priority Leads -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Priority Leads</h3>
+                            <div id="priorityLeadsContainer" class="space-y-3">
+                                <!-- Dynamic priority leads -->
+                            </div>
+                        </div>
+
+                        <!-- Recent Activity -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Recent Activity</h3>
+                            <div id="recentActivityContainer" class="space-y-3">
+                                <!-- Dynamic recent activity -->
+                            </div>
+                        </div>
+
+                        <!-- Active Alerts -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Active Alerts</h3>
+                            <div id="alertsContainer" class="space-y-3">
+                                <!-- Dynamic alerts -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaigns Tab -->
+                <div id="campaignsTab" class="linkedin-tab-content hidden">
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold">Campaign Management</h3>
+                            <button id="createCampaignBtn2" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                                Create New Campaign
+                            </button>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prospects</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connections</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Responses</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response Rate</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="campaignsTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic campaigns -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leads Tab -->
+                <div id="leadsTab" class="linkedin-tab-content hidden">
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold">Lead Management</h3>
+                            <div class="flex space-x-2">
+                                <button id="discoverLeadsBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+                                    Discover Leads
+                                </button>
+                                <button id="processAutomationBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors">
+                                    Process Automation
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leadsTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic leads -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Tab -->
+                <div id="pipelineTab" class="linkedin-tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Pipeline Metrics -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Pipeline Performance</h3>
+                            <canvas id="pipelineMetricsChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Conversion Funnel -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Conversion Funnel</h3>
+                            <canvas id="conversionFunnelChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Pipeline Trends -->
+                        <div class="lg:col-span-2 chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Pipeline Trends</h3>
+                            <canvas id="pipelineTrendsChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Tab -->
+                <div id="analyticsTab" class="linkedin-tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Performance Analytics -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Campaign Performance</h3>
+                            <canvas id="performanceChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Response Analytics -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Response Analytics</h3>
+                            <canvas id="responseChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Engagement Trends -->
+                        <div class="lg:col-span-2 chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Engagement Trends</h3>
+                            <canvas id="engagementTrendsChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workflows Tab -->
+                <div id="workflowsTab" class="linkedin-tab-content hidden">
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold">Workflow Management</h3>
+                            <button class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors">
+                                Create Workflow
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Workflow Analytics -->
+                            <div class="chart-container p-6 rounded-lg shadow-sm">
+                                <h3 class="text-lg font-semibold mb-4">Workflow Performance</h3>
+                                <canvas id="workflowChart" height="300"></canvas>
+                            </div>
+
+                            <!-- Active Workflows -->
+                            <div class="bg-white p-6 rounded-lg shadow-sm border">
+                                <h3 class="text-lg font-semibold mb-4">Active Workflows</h3>
+                                <div id="activeWorkflows" class="space-y-3">
+                                    <!-- Dynamic workflows -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Campaign Modal -->
+    <div id="createCampaignModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-semibold">Create New Campaign</h3>
+                <button id="closeCampaignModal" class="text-gray-400 hover:text-gray-600">×</button>
+            </div>
+            <form id="createCampaignForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Campaign Name</label>
+                        <input type="text" name="name" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea name="description" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Target Audience Keywords</label>
+                        <input type="text" name="keywords" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="CEO, CTO, AI, etc.">
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="submit" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
+                            Create Campaign
+                        </button>
+                        <button type="button" onclick="hideModal('createCampaignModal')" class="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Discover Leads Modal -->
+    <div id="leadDiscoveryModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-semibold">Discover New Leads</h3>
+                <button id="closeLeadDiscoveryModal" class="text-gray-400 hover:text-gray-600">×</button>
+            </div>
+            <form id="discoverLeadsForm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Keywords</label>
+                        <input type="text" name="keywords" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="AI, Risk Management, etc.">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Job Titles</label>
+                        <input type="text" name="titles" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="CEO, CTO, Chief Risk Officer">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Industries</label>
+                        <input type="text" name="industries" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Financial Services, Technology">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Number of Leads</label>
+                        <select name="limit" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="25">25 leads</option>
+                            <option value="50" selected>50 leads</option>
+                            <option value="100">100 leads</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="submit" class="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                            Discover Leads
+                        </button>
+                        <button type="button" onclick="hideModal('leadDiscoveryModal')" class="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lead Details Modal -->
+    <div id="leadDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-semibold">Lead Details</h3>
+                <button id="closeLeadDetailsModal" class="text-gray-400 hover:text-gray-600">×</button>
+            </div>
+            <div id="leadDetailsContent">
+                <!-- Dynamic lead details content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">LinkedIn Dashboard Login</h2>
+                <p class="text-gray-600 mt-2">Please login to access the LinkedIn Sales Navigator Automation Dashboard</p>
+            </div>
+            <form id="loginForm">
+                <div class="space-y-4">
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                        <input type="email" id="email" name="email" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required value="dede@risktravel.com">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                        <input type="password" id="password" name="password" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required value="admin123">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition-colors" id="loginBtn">
+                        Login
+                    </button>
+                </div>
+            </form>
+            <div id="loginError" class="hidden mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                <span id="loginErrorMessage">Login failed. Please try again.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl">
+            <div class="flex items-center space-x-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span class="text-lg">Loading LinkedIn data...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include the existing LinkedIn dashboard JavaScript -->
+    <script src="/static/js/linkedin-dashboard.js"></script>
+    
+    <!-- Global utility functions -->
+    <script>
+        // Global utility functions for modals and alerts
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+        
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+        
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorAlert').classList.remove('hidden');
+            setTimeout(() => {
+                hideError();
+            }, 5000);
+        }
+        
+        function hideError() {
+            document.getElementById('errorAlert').classList.add('hidden');
+        }
+        
+        function showSuccess(message) {
+            document.getElementById('successMessage').textContent = message;
+            document.getElementById('successAlert').classList.remove('hidden');
+            setTimeout(() => {
+                hideSuccess();
+            }, 3000);
+        }
+        
+        function hideSuccess() {
+            document.getElementById('successAlert').classList.add('hidden');
+        }
+
+        // Authentication handling
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+        }
+        
+        function hideLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+        
+        function showLoginError(message) {
+            document.getElementById('loginErrorMessage').textContent = message;
+            document.getElementById('loginError').classList.remove('hidden');
+        }
+        
+        function hideLoginError() {
+            document.getElementById('loginError').classList.add('hidden');
+        }
+        
+        async function handleLogin(email, password) {
+            try {
+                const response = await axios.post('/api/auth/login', {
+                    email: email,
+                    password: password
+                });
+                
+                if (response.data.token) {
+                    localStorage.setItem('authToken', response.data.token);
+                    hideLoginModal();
+                    hideLoginError();
+                    // Initialize dashboard after successful login
+                    window.linkedInDashboard = new LinkedInDashboard();
+                    return true;
+                } else {
+                    showLoginError('Login failed. Please try again.');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showLoginError('Login failed. Please check your credentials.');
+                return false;
+            }
+        }
+
+        // Handle login form submission when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already authenticated
+            const authToken = localStorage.getItem('authToken');
+            if (!authToken) {
+                // Show login modal if no token
+                showLoginModal();
+            } else {
+                // Hide login modal if token exists
+                hideLoginModal();
+            }
+            
+            // Handle login form submission
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                hideLoginError();
+                
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                if (!email || !password) {
+                    showLoginError('Please enter both email and password.');
+                    return;
+                }
+                
+                const success = await handleLogin(email, password);
+                if (success) {
+                    // Reload page to trigger dashboard initialization
+                    window.location.reload();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

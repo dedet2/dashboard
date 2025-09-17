@@ -462,6 +462,122 @@ class ApolloAPIWrapper:
             per_page=per_page
         )
     
+    def search_consulting_executives(self,
+                                    organization_locations: List[str] = None,
+                                    employee_count_ranges: List[str] = ["50,100", "100,250", "250,500", "500,1000"],
+                                    revenue_range: Dict[str, int] = {"min": 5000000},  # $5M+
+                                    page: int = 1,
+                                    per_page: int = 25) -> Dict:
+        """
+        Search for consulting executives and independent consultants
+        
+        Args:
+            organization_locations: List of company locations to search
+            employee_count_ranges: List of employee count ranges
+            revenue_range: Dict with 'min' and 'max' revenue values
+            page: Page number
+            per_page: Results per page
+            
+        Returns:
+            Dict containing consulting executive prospects
+        """
+        consulting_titles = [
+            "consultant", "senior consultant", "principal consultant",
+            "managing consultant", "independent consultant", "strategy consultant",
+            "management consultant", "business consultant", "advisory",
+            "advisor", "senior advisor", "strategic advisor",
+            "fractional executive", "interim executive", "risk consultant",
+            "compliance consultant", "governance consultant"
+        ]
+        
+        consulting_seniorities = ["senior", "director", "vp", "partner", "owner", "c_suite"]
+        
+        return self.search_people(
+            person_titles=consulting_titles,
+            person_seniorities=consulting_seniorities,
+            organization_locations=organization_locations,
+            employee_count_ranges=employee_count_ranges,
+            revenue_range=revenue_range,
+            keywords="consulting advisory strategy management independent fractional",
+            email_status=["verified", "likely_to_engage", "unverified"],
+            page=page,
+            per_page=per_page,
+            include_similar_titles=True
+        )
+
+    def search_optimized_board_directors(self,
+                                       organization_locations: List[str] = None,
+                                       page: int = 1,
+                                       per_page: int = 25) -> Dict:
+        """
+        Optimized search for board directors with more practical criteria
+        
+        Returns:
+            Dict containing board director prospects with broader criteria
+        """
+        board_titles = [
+            "board director", "independent director", "board member", 
+            "non-executive director", "chairman", "board chair", "director",
+            "lead director", "presiding director", "board advisor",
+            "trustee", "board trustee"
+        ]
+        
+        board_seniorities = ["c_suite", "founder", "owner", "partner", "vp"]
+        
+        # More practical company sizes and revenue
+        employee_ranges = ["250,500", "500,1000", "1000,5000", "5000,10000", "10000,50000"]
+        revenue_range = {"min": 25000000}  # $25M+ instead of $500M+
+        
+        return self.search_people(
+            person_titles=board_titles,
+            person_seniorities=board_seniorities,
+            organization_locations=organization_locations,
+            employee_count_ranges=employee_ranges,
+            revenue_range=revenue_range,
+            keywords="board governance director independent corporate governance",
+            email_status=["verified", "likely_to_engage", "unverified"],
+            page=page,
+            per_page=per_page,
+            include_similar_titles=True
+        )
+
+    def search_optimized_grc_executives(self,
+                                      organization_locations: List[str] = None,
+                                      page: int = 1,
+                                      per_page: int = 25) -> Dict:
+        """
+        Optimized search for GRC executives with more practical criteria
+        
+        Returns:
+            Dict containing GRC executive prospects with broader criteria
+        """
+        grc_titles = [
+            "chief risk officer", "cro", "head of risk", "risk director",
+            "compliance officer", "chief compliance officer", "compliance director",
+            "governance director", "enterprise risk", "risk management",
+            "audit director", "chief audit", "regulatory affairs",
+            "risk consultant", "compliance consultant", "governance consultant"
+        ]
+        
+        grc_seniorities = ["c_suite", "vp", "head", "director", "senior", "manager"]
+        
+        # Broader company sizes and lower revenue requirement
+        employee_ranges = ["100,250", "250,500", "500,1000", "1000,5000", "5000,10000"]
+        revenue_range = {"min": 10000000}  # $10M+ instead of $100M+
+        
+        return self.search_people(
+            person_titles=grc_titles,
+            person_seniorities=grc_seniorities,
+            organization_locations=organization_locations,
+            employee_count_ranges=employee_ranges,
+            revenue_range=revenue_range,
+            keywords="risk governance compliance audit regulatory consulting advisory",
+            email_status=["verified", "likely_to_engage", "unverified"],
+            page=page,
+            per_page=per_page,
+            include_similar_titles=True
+        )
+    
     # === DATA CONVERSION METHODS ===
     
     def convert_to_prospect(self, apollo_contact: Dict) -> ApolloProspect:
@@ -679,3 +795,13 @@ def create_apollo_client() -> Optional[ApolloAPIWrapper]:
         return None
     
     return ApolloAPIWrapper(api_key)
+
+# Alias for compatibility with LinkedIn automation system
+def create_apollo_wrapper() -> Optional[ApolloAPIWrapper]:
+    """
+    Create Apollo wrapper using environment variable (alias for create_apollo_client)
+    
+    Returns:
+        ApolloAPIWrapper instance or None if API key not found
+    """
+    return create_apollo_client()
