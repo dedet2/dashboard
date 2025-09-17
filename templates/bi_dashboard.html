@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Empire - Business Intelligence Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
+        .metric-card { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .revenue-card { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .agent-card { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .kpi-card { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .chart-container { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white p-4 shadow-lg sticky top-0 z-40">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">🚀 AI Empire - Business Intelligence</h1>
+            <div class="flex space-x-4 items-center">
+                <a href="/executive-pipeline" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition-colors inline-flex items-center">
+                    🎯 Pipeline Management
+                </a>
+                <button id="generateReportBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors">
+                    📊 Generate Report
+                </button>
+                <button id="refreshDataBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                    🔄 Refresh Data
+                </button>
+                <button id="logoutBtn" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Executive Summary Cards -->
+    <div class="container mx-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Revenue Card -->
+            <div class="revenue-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Total Monthly Revenue</p>
+                        <p class="text-3xl font-bold" id="totalRevenue">$0</p>
+                        <p class="text-sm opacity-75" id="revenueGrowth">+0% vs last month</p>
+                    </div>
+                    <div class="text-4xl opacity-75">💰</div>
+                </div>
+            </div>
+
+            <!-- AI Agents Performance Card -->
+            <div class="agent-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Active AI Agents</p>
+                        <p class="text-3xl font-bold" id="activeAgents">0</p>
+                        <p class="text-sm opacity-75" id="agentEfficiency">0% avg efficiency</p>
+                    </div>
+                    <div class="text-4xl opacity-75">🤖</div>
+                </div>
+            </div>
+
+            <!-- Pipeline Value Card -->
+            <div class="metric-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Pipeline Value</p>
+                        <p class="text-3xl font-bold" id="pipelineValue">$0</p>
+                        <p class="text-sm opacity-75" id="pipelineGrowth">0 opportunities</p>
+                    </div>
+                    <div class="text-4xl opacity-75">📈</div>
+                </div>
+            </div>
+
+            <!-- Success Rate Card -->
+            <div class="kpi-card text-white p-6 rounded-xl shadow-lg card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Overall Success Rate</p>
+                        <p class="text-3xl font-bold" id="successRate">0%</p>
+                        <p class="text-sm opacity-75" id="successTrend">Target: 85%</p>
+                    </div>
+                    <div class="text-4xl opacity-75">🎯</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Analytics Tabs -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8 px-6">
+                    <button class="tab-btn py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600" data-tab="overview">Overview</button>
+                    <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="revenue">Revenue Analytics</button>
+                    <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="agents">Agent Performance</button>
+                    <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="forecasting">Forecasting</button>
+                    <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="reports">Reports</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Overview Tab -->
+                <div id="overview-tab" class="tab-content">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Revenue Trend Chart -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Revenue Trend (Last 6 Months)</h3>
+                            <canvas id="revenueTrendChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Top Performing Agents -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Top Performing Agents</h3>
+                            <div id="topAgents" class="space-y-3">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+
+                        <!-- KPI Performance -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">KPI Performance Overview</h3>
+                            <canvas id="kpiChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Recent Activities -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Recent Activities</h3>
+                            <div id="recentActivities" class="space-y-3">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Revenue Analytics Tab -->
+                <div id="revenue-tab" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Revenue by Stream -->
+                        <div class="lg:col-span-2">
+                            <div class="chart-container p-6 rounded-lg shadow-sm">
+                                <h3 class="text-lg font-semibold mb-4">Revenue by Stream</h3>
+                                <canvas id="revenueStreamChart" height="400"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Revenue Breakdown -->
+                        <div class="space-y-6">
+                            <div class="bg-white p-6 rounded-lg shadow-sm border">
+                                <h3 class="text-lg font-semibold mb-4">Revenue Breakdown</h3>
+                                <canvas id="revenueBreakdownChart" height="300"></canvas>
+                            </div>
+                            
+                            <div class="bg-white p-6 rounded-lg shadow-sm border">
+                                <h3 class="text-lg font-semibold mb-4">Growth Metrics</h3>
+                                <div id="growthMetrics" class="space-y-3">
+                                    <!-- Dynamic content -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Targets vs Actuals -->
+                        <div class="lg:col-span-3">
+                            <div class="chart-container p-6 rounded-lg shadow-sm">
+                                <h3 class="text-lg font-semibold mb-4">Monthly Targets vs Actuals</h3>
+                                <canvas id="targetsChart" height="300"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent Performance Tab -->
+                <div id="agents-tab" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Agent Efficiency Chart -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Agent Efficiency by Tier</h3>
+                            <canvas id="agentEfficiencyChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Agent Success Rates -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Success Rates by Agent</h3>
+                            <canvas id="agentSuccessChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Performance Metrics Table -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Detailed Performance Metrics</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline Value</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agentMetricsTable" class="bg-white divide-y divide-gray-200">
+                                        <!-- Dynamic content -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Forecasting Tab -->
+                <div id="forecasting-tab" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Revenue Forecast -->
+                        <div class="chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Revenue Forecast (Next 6 Months)</h3>
+                            <canvas id="revenueForecastChart" height="300"></canvas>
+                        </div>
+
+                        <!-- Goal Progress -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Goal Progress Tracking</h3>
+                            <div id="goalProgress" class="space-y-4">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+
+                        <!-- Scenario Analysis -->
+                        <div class="lg:col-span-2 chart-container p-6 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold mb-4">Scenario Analysis</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                                    <h4 class="font-medium text-green-800">Best Case</h4>
+                                    <p class="text-2xl font-bold text-green-900" id="bestCaseRevenue">$0</p>
+                                    <p class="text-sm text-green-700">+15% growth scenario</p>
+                                </div>
+                                <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                    <h4 class="font-medium text-blue-800">Most Likely</h4>
+                                    <p class="text-2xl font-bold text-blue-900" id="likelyRevenue">$0</p>
+                                    <p class="text-sm text-blue-700">Current trend</p>
+                                </div>
+                                <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500">
+                                    <h4 class="font-medium text-yellow-800">Conservative</h4>
+                                    <p class="text-2xl font-bold text-yellow-900" id="conservativeRevenue">$0</p>
+                                    <p class="text-sm text-yellow-700">-5% growth scenario</p>
+                                </div>
+                            </div>
+                            <canvas id="scenarioChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Tab -->
+                <div id="reports-tab" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Report Generation -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Generate Custom Report</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
+                                    <select id="reportType" class="w-full p-2 border border-gray-300 rounded-md">
+                                        <option value="executive">Executive Summary</option>
+                                        <option value="revenue">Revenue Analysis</option>
+                                        <option value="agent">Agent Performance</option>
+                                        <option value="forecast">Forecast & Projections</option>
+                                        <option value="comprehensive">Comprehensive Report</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
+                                    <select id="reportPeriod" class="w-full p-2 border border-gray-300 rounded-md">
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                        <option value="quarterly">Quarterly</option>
+                                        <option value="ytd">Year to Date</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <button id="generateCustomReport" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                                        Generate Report
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Reports -->
+                        <div class="bg-white p-6 rounded-lg shadow-sm border">
+                            <h3 class="text-lg font-semibold mb-4">Recent Reports</h3>
+                            <div id="recentReports" class="space-y-3">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+
+                        <!-- Generated Report Display -->
+                        <div id="reportDisplay" class="lg:col-span-3 bg-white p-6 rounded-lg shadow-sm border hidden">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold">Generated Report</h3>
+                                <div class="space-x-2">
+                                    <button id="exportPDF" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">Export PDF</button>
+                                    <button id="exportExcel" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">Export Excel</button>
+                                    <button id="closeReport" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">Close</button>
+                                </div>
+                            </div>
+                            <div id="reportContent" class="prose max-w-none">
+                                <!-- Generated report content -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl">
+            <div class="flex items-center space-x-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span class="text-lg">Loading analytics data...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bi-dashboard.js"></script>
+</body>
+</html>

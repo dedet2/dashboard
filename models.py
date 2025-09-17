@@ -240,35 +240,6 @@ class HealthMetric(db.Model):
         }
 
 
-class ExecutiveOpportunity(db.Model):
-    __tablename__ = 'executive_opportunities'
-    
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    company: Mapped[str] = mapped_column(String(200), nullable=False)
-    type: Mapped[str] = mapped_column(String(100), nullable=False)
-    compensation_range: Mapped[str] = mapped_column(String(100), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default='prospect')
-    application_date: Mapped[str] = mapped_column(String(20), nullable=True)
-    interview_stages: Mapped[list] = mapped_column(JSON, nullable=True)
-    notes: Mapped[str] = mapped_column(Text, nullable=True)
-    ai_match_score: Mapped[float] = mapped_column(Float, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'title': self.title,
-            'company': self.company,
-            'type': self.type,
-            'compensation_range': self.compensation_range,
-            'status': self.status,
-            'application_date': self.application_date,
-            'interview_stages': self.interview_stages or [],
-            'notes': self.notes,
-            'ai_match_score': self.ai_match_score,
-            'created_at': self.created_at.isoformat()
-        }
 
 
 class RetreatEvent(db.Model):

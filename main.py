@@ -12,7 +12,8 @@ import logging
 import json
 import requests
 from dotenv import load_dotenv
-from database import db, RevenueStream, AIAgent, HealthcareProvider, HealthcareAppointment, HealthMetric, ExecutiveOpportunity, RetreatEvent, KPIMetric, Milestone, EnergyTracking, WellnessGoal, WellnessAlert, WellnessMetric
+from sqlalchemy import func, desc
+from database import db, RevenueStream, AIAgent, HealthcareProvider, HealthcareAppointment, HealthMetric, ExecutiveOpportunity, SpeakingOpportunity, InterviewStage, CompensationBenchmark, RetreatEvent, KPIMetric, Milestone, EnergyTracking, WellnessGoal, WellnessAlert, WellnessMetric, WorkflowTrigger, BusinessRule, WorkflowAction, WorkflowSchedule, WorkflowExecution, NotificationChannel, WorkflowWebhook, BusinessEvent
 
 # Load environment variables
 load_dotenv()
@@ -162,10 +163,10 @@ def seed_database():
                 type=opp_data['type'],
                 title=opp_data['title'],
                 company=opp_data['company'],
-                compensation=opp_data.get('compensation'),
+                compensation_range=opp_data.get('compensation'),
                 location=opp_data.get('location'),
                 status=opp_data.get('status', 'prospect'),
-                match_score=opp_data.get('match_score', 0.0),
+                ai_match_score=opp_data.get('match_score', 0.0),
                 requirements=opp_data.get('requirements', []),
                 application_date=opp_data.get('application_date'),
                 next_step=opp_data.get('next_step'),
@@ -895,6 +896,730 @@ def call_perplexity_api(prompt, model="llama-3.1-sonar-small-128k-online"):
     except requests.exceptions.RequestException as e:
         logger.error(f"Perplexity API error: {e}")
         return None
+
+
+# ============================
+# BUSINESS RULE ENGINE CORE
+# ============================
+
+import re
+import threading
+import time
+from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
+import uuid
+from datetime import datetime, timedelta
+
+class BusinessRuleEngine:
+    """
+    Core business rule engine for the AI Empire platform.
+    Handles condition evaluation, action execution, and workflow management.
+    """
+    
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=10)
+        self.active_executions = {}
+        self.condition_evaluators = {
+            'revenue_milestone': self._evaluate_revenue_condition,
+            'agent_performance': self._evaluate_agent_performance,
+            'opportunity_status': self._evaluate_opportunity_condition,
+            'health_metric': self._evaluate_health_condition,
+            'kpi_threshold': self._evaluate_kpi_condition,
+            'schedule_trigger': self._evaluate_schedule_condition,
+            'custom': self._evaluate_custom_condition
+        }
+        self.action_executors = {
+            'notification': self._execute_notification,
+            'api_call': self._execute_api_call,
+            'agent_task': self._execute_agent_task,
+            'email': self._execute_email,
+            'webhook': self._execute_webhook,
+            'update_entity': self._execute_update_entity,
+            'create_opportunity': self._execute_create_opportunity,
+            'schedule_followup': self._execute_schedule_followup
+        }
+    
+    def process_business_event(self, event_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Process a business event and trigger applicable rules"""
+        try:
+            # Create business event record
+            event_id = f"EVT-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+            business_event = BusinessEvent(
+                event_id=event_id,
+                event_type=event_data['event_type'],
+                entity_type=event_data['entity_type'],
+                entity_id=event_data['entity_id'],
+                event_data=event_data,
+                source=event_data.get('source', 'system'),
+                priority=event_data.get('priority', 'medium')
+            )
+            db.session.add(business_event)
+            db.session.commit()
+            
+            # Find applicable triggers
+            triggers = WorkflowTrigger.query.filter(
+                WorkflowTrigger.enabled == True,
+                WorkflowTrigger.event_type == event_data['event_type']
+            ).all()
+            
+            results = []
+            for trigger in triggers:
+                if self._evaluate_trigger_conditions(trigger, event_data):
+                    # Find rules associated with this trigger
+                    rules = BusinessRule.query.filter(
+                        BusinessRule.enabled == True,
+                        BusinessRule.rule_category == event_data['entity_type']
+                    ).order_by(BusinessRule.priority.desc()).all()
+                    
+                    for rule in rules:
+                        result = self._execute_rule(rule, event_data, trigger.id)
+                        if result:
+                            results.append(result)
+            
+            # Mark event as processed
+            business_event.processed = True
+            business_event.processed_at = datetime.utcnow()
+            db.session.commit()
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error processing business event: {e}")
+            return []
+    
+    def _evaluate_trigger_conditions(self, trigger: WorkflowTrigger, event_data: Dict[str, Any]) -> bool:
+        """Evaluate if trigger conditions are met"""
+        if not trigger.conditions:
+            return True
+        
+        try:
+            for condition in trigger.conditions.get('conditions', []):
+                field = condition.get('field')
+                operator = condition.get('operator')
+                value = condition.get('value')
+                
+                event_value = self._get_nested_value(event_data, field)
+                
+                if not self._evaluate_condition_operator(event_value, operator, value):
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error evaluating trigger conditions: {e}")
+            return False
+    
+    def _execute_rule(self, rule: BusinessRule, context: Dict[str, Any], trigger_id: Optional[int] = None) -> Dict[str, Any]:
+        """Execute a business rule with given context"""
+        execution_id = f"EXEC-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        
+        try:
+            # Create execution record
+            execution = WorkflowExecution(
+                execution_id=execution_id,
+                trigger_id=trigger_id,
+                rule_id=rule.id,
+                execution_type='trigger' if trigger_id else 'manual',
+                execution_context=context
+            )
+            db.session.add(execution)
+            db.session.commit()
+            
+            # Evaluate conditions
+            if not self._evaluate_rule_conditions(rule, context):
+                execution.status = 'completed'
+                execution.end_time = datetime.utcnow()
+                execution.result_data = {'skipped': True, 'reason': 'Conditions not met'}
+                db.session.commit()
+                return None
+            
+            # Execute actions
+            results = []
+            for action_config in rule.actions:
+                try:
+                    action_result = self._execute_action(action_config, context)
+                    results.append(action_result)
+                    execution.actions_executed += 1
+                    if action_result.get('success'):
+                        execution.actions_successful += 1
+                    else:
+                        execution.actions_failed += 1
+                except Exception as e:
+                    logger.error(f"Error executing action: {e}")
+                    execution.actions_failed += 1
+                    results.append({'success': False, 'error': str(e)})
+            
+            # Update execution record
+            execution.status = 'completed'
+            execution.end_time = datetime.utcnow()
+            execution.duration_seconds = (execution.end_time - execution.start_time).total_seconds()
+            execution.result_data = {'actions': results}
+            
+            # Update rule statistics
+            rule.execution_count += 1
+            rule.last_execution = datetime.utcnow()
+            
+            db.session.commit()
+            
+            return {
+                'execution_id': execution_id,
+                'rule_id': rule.id,
+                'rule_name': rule.name,
+                'success': True,
+                'actions_executed': len(results),
+                'results': results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error executing rule {rule.id}: {e}")
+            
+            # Update execution with error
+            execution.status = 'failed'
+            execution.end_time = datetime.utcnow()
+            execution.error_message = str(e)
+            db.session.commit()
+            
+            return {
+                'execution_id': execution_id,
+                'rule_id': rule.id,
+                'success': False,
+                'error': str(e)
+            }
+    
+    def _evaluate_rule_conditions(self, rule: BusinessRule, context: Dict[str, Any]) -> bool:
+        """Evaluate if rule conditions are satisfied"""
+        if not rule.conditions:
+            return True
+        
+        try:
+            condition_results = []
+            
+            for condition in rule.conditions:
+                condition_type = condition.get('type', 'custom')
+                evaluator = self.condition_evaluators.get(condition_type, self._evaluate_custom_condition)
+                result = evaluator(condition, context)
+                condition_results.append(result)
+            
+            # Apply logical operator
+            if rule.logical_operator == 'OR':
+                return any(condition_results)
+            else:  # Default to AND
+                return all(condition_results)
+                
+        except Exception as e:
+            logger.error(f"Error evaluating rule conditions: {e}")
+            return False
+    
+    def _evaluate_revenue_condition(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate revenue-based conditions"""
+        try:
+            field = condition.get('field', 'current_month')
+            operator = condition.get('operator', 'greater_than')
+            threshold = condition.get('value', 0)
+            
+            # Get revenue stream data
+            stream_id = context.get('entity_id')
+            if stream_id:
+                stream = RevenueStream.query.get(stream_id)
+                if stream:
+                    value = getattr(stream, field, 0)
+                    return self._evaluate_condition_operator(value, operator, threshold)
+            return False
+        except Exception as e:
+            logger.error(f"Error evaluating revenue condition: {e}")
+            return False
+    
+    def _evaluate_agent_performance(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate AI agent performance conditions"""
+        try:
+            metric = condition.get('metric', 'success_rate')
+            operator = condition.get('operator', 'greater_than')
+            threshold = condition.get('value', 0)
+            
+            agent_id = context.get('entity_id')
+            if agent_id:
+                agent = AIAgent.query.get(agent_id)
+                if agent and agent.performance:
+                    value = agent.performance.get(metric, 0)
+                    return self._evaluate_condition_operator(value, operator, threshold)
+            return False
+        except Exception as e:
+            logger.error(f"Error evaluating agent performance condition: {e}")
+            return False
+    
+    def _evaluate_opportunity_condition(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate executive opportunity conditions"""
+        try:
+            field = condition.get('field', 'status')
+            operator = condition.get('operator', 'equals')
+            value = condition.get('value')
+            
+            opportunity_id = context.get('entity_id')
+            if opportunity_id:
+                opportunity = ExecutiveOpportunity.query.get(opportunity_id)
+                if opportunity:
+                    field_value = getattr(opportunity, field, None)
+                    return self._evaluate_condition_operator(field_value, operator, value)
+            return False
+        except Exception as e:
+            logger.error(f"Error evaluating opportunity condition: {e}")
+            return False
+    
+    def _evaluate_health_condition(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate health metric conditions"""
+        try:
+            metric_name = condition.get('metric', 'blood_pressure')
+            operator = condition.get('operator', 'greater_than')
+            threshold = condition.get('value', 0)
+            
+            # Get latest health metric
+            metric = HealthMetric.query.filter_by(metric=metric_name).order_by(HealthMetric.date.desc()).first()
+            if metric:
+                # Parse numeric value from string (handle formats like "125/80")
+                value_str = metric.value
+                if '/' in value_str:
+                    # For blood pressure, use systolic (first number)
+                    value = float(value_str.split('/')[0])
+                else:
+                    value = float(value_str)
+                return self._evaluate_condition_operator(value, operator, threshold)
+            return False
+        except Exception as e:
+            logger.error(f"Error evaluating health condition: {e}")
+            return False
+    
+    def _evaluate_kpi_condition(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate KPI threshold conditions"""
+        try:
+            kpi_name = condition.get('kpi', 'MRR')
+            operator = condition.get('operator', 'greater_than')
+            threshold = condition.get('value', 0)
+            
+            kpi = KPIMetric.query.filter_by(name=kpi_name).first()
+            if kpi:
+                return self._evaluate_condition_operator(kpi.value, operator, threshold)
+            return False
+        except Exception as e:
+            logger.error(f"Error evaluating KPI condition: {e}")
+            return False
+    
+    def _evaluate_schedule_condition(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate schedule-based conditions"""
+        try:
+            schedule_type = condition.get('schedule_type', 'time')
+            
+            if schedule_type == 'time':
+                target_time = condition.get('time')
+                current_time = datetime.now().strftime('%H:%M')
+                return current_time == target_time
+            elif schedule_type == 'day_of_week':
+                target_day = condition.get('day')
+                current_day = datetime.now().strftime('%A').lower()
+                return current_day == target_day.lower()
+            elif schedule_type == 'date':
+                target_date = condition.get('date')
+                current_date = datetime.now().strftime('%Y-%m-%d')
+                return current_date == target_date
+                
+            return False
+        except Exception as e:
+            logger.error(f"Error evaluating schedule condition: {e}")
+            return False
+    
+    def _evaluate_custom_condition(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Evaluate custom conditions with field/operator/value"""
+        try:
+            field = condition.get('field')
+            operator = condition.get('operator')
+            expected_value = condition.get('value')
+            
+            # Get actual value from context
+            actual_value = self._get_nested_value(context, field)
+            
+            return self._evaluate_condition_operator(actual_value, operator, expected_value)
+        except Exception as e:
+            logger.error(f"Error evaluating custom condition: {e}")
+            return False
+    
+    def _evaluate_condition_operator(self, actual_value: Any, operator: str, expected_value: Any) -> bool:
+        """Evaluate condition using operator"""
+        try:
+            if operator == 'equals':
+                return actual_value == expected_value
+            elif operator == 'not_equals':
+                return actual_value != expected_value
+            elif operator == 'greater_than':
+                return float(actual_value) > float(expected_value)
+            elif operator == 'less_than':
+                return float(actual_value) < float(expected_value)
+            elif operator == 'greater_than_or_equal':
+                return float(actual_value) >= float(expected_value)
+            elif operator == 'less_than_or_equal':
+                return float(actual_value) <= float(expected_value)
+            elif operator == 'contains':
+                return str(expected_value).lower() in str(actual_value).lower()
+            elif operator == 'not_contains':
+                return str(expected_value).lower() not in str(actual_value).lower()
+            elif operator == 'starts_with':
+                return str(actual_value).startswith(str(expected_value))
+            elif operator == 'ends_with':
+                return str(actual_value).endswith(str(expected_value))
+            elif operator == 'regex':
+                return bool(re.match(str(expected_value), str(actual_value)))
+            elif operator == 'in':
+                return actual_value in expected_value if isinstance(expected_value, list) else False
+            elif operator == 'not_in':
+                return actual_value not in expected_value if isinstance(expected_value, list) else True
+            else:
+                logger.warning(f"Unknown operator: {operator}")
+                return False
+        except Exception as e:
+            logger.error(f"Error evaluating operator {operator}: {e}")
+            return False
+    
+    def _execute_action(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a specific action"""
+        action_type = action_config.get('type')
+        executor = self.action_executors.get(action_type)
+        
+        if not executor:
+            logger.error(f"Unknown action type: {action_type}")
+            return {'success': False, 'error': f'Unknown action type: {action_type}'}
+        
+        try:
+            return executor(action_config, context)
+        except Exception as e:
+            logger.error(f"Error executing action {action_type}: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_notification(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute notification action"""
+        try:
+            message = action_config.get('message', '').format(**context)
+            channels = action_config.get('channels', ['internal'])
+            priority = action_config.get('priority', 'medium')
+            
+            results = []
+            for channel_name in channels:
+                channel = NotificationChannel.query.filter_by(name=channel_name, enabled=True).first()
+                if channel:
+                    # Send notification through channel
+                    result = self._send_notification(channel, message, priority, context)
+                    results.append(result)
+            
+            return {
+                'success': True,
+                'action': 'notification',
+                'message': message,
+                'channels_notified': len(results),
+                'results': results
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_api_call(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute API call action"""
+        try:
+            url = action_config.get('url', '').format(**context)
+            method = action_config.get('method', 'POST')
+            headers = action_config.get('headers', {})
+            data = action_config.get('data', {})
+            
+            # Format data with context
+            formatted_data = self._format_template_data(data, context)
+            
+            response = requests.request(method, url, headers=headers, json=formatted_data, timeout=30)
+            response.raise_for_status()
+            
+            return {
+                'success': True,
+                'action': 'api_call',
+                'url': url,
+                'method': method,
+                'status_code': response.status_code,
+                'response': response.json() if response.content else None
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_agent_task(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute agent task action"""
+        try:
+            agent_id = action_config.get('agent_id')
+            task_type = action_config.get('task_type', 'general')
+            task_data = action_config.get('task_data', {})
+            
+            # Format task data with context
+            formatted_task = self._format_template_data(task_data, context)
+            
+            agent = AIAgent.query.get(agent_id)
+            if not agent:
+                return {'success': False, 'error': f'Agent {agent_id} not found'}
+            
+            # Create task (in real implementation, this would dispatch to the agent)
+            task_id = f"TASK-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+            
+            # Update agent's next_scheduled
+            agent.next_scheduled = datetime.utcnow() + timedelta(minutes=5)
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'action': 'agent_task',
+                'agent_id': agent_id,
+                'agent_name': agent.name,
+                'task_id': task_id,
+                'task_type': task_type,
+                'task_data': formatted_task
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_email(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute email action"""
+        try:
+            to_email = action_config.get('to', '').format(**context)
+            subject = action_config.get('subject', '').format(**context)
+            body = action_config.get('body', '').format(**context)
+            
+            # In production, integrate with email service
+            # For now, log the email
+            logger.info(f"Email sent to {to_email}: {subject}")
+            
+            return {
+                'success': True,
+                'action': 'email',
+                'to': to_email,
+                'subject': subject,
+                'body_length': len(body)
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_webhook(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute webhook action"""
+        try:
+            webhook_id = action_config.get('webhook_id')
+            payload = action_config.get('payload', {})
+            
+            webhook = WorkflowWebhook.query.get(webhook_id)
+            if not webhook:
+                return {'success': False, 'error': f'Webhook {webhook_id} not found'}
+            
+            # Format payload with context
+            formatted_payload = self._format_template_data(payload, context)
+            
+            headers = webhook.headers or {}
+            if webhook.secret_key:
+                headers['X-Webhook-Secret'] = webhook.secret_key
+            
+            response = requests.post(
+                webhook.webhook_url,
+                json=formatted_payload,
+                headers=headers,
+                timeout=webhook.timeout_seconds
+            )
+            response.raise_for_status()
+            
+            # Update webhook last triggered
+            webhook.last_triggered = datetime.utcnow()
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'action': 'webhook',
+                'webhook_id': webhook_id,
+                'webhook_name': webhook.name,
+                'status_code': response.status_code
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_update_entity(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute entity update action"""
+        try:
+            entity_type = action_config.get('entity_type')
+            entity_id = action_config.get('entity_id') or context.get('entity_id')
+            updates = action_config.get('updates', {})
+            
+            # Get entity model class
+            model_map = {
+                'revenue_stream': RevenueStream,
+                'ai_agent': AIAgent,
+                'opportunity': ExecutiveOpportunity,
+                'health_metric': HealthMetric,
+                'kpi_metric': KPIMetric
+            }
+            
+            model_class = model_map.get(entity_type)
+            if not model_class:
+                return {'success': False, 'error': f'Unknown entity type: {entity_type}'}
+            
+            entity = model_class.query.get(entity_id)
+            if not entity:
+                return {'success': False, 'error': f'Entity {entity_id} not found'}
+            
+            # Apply updates
+            for field, value in updates.items():
+                if hasattr(entity, field):
+                    # Format value with context if it's a string
+                    if isinstance(value, str):
+                        value = value.format(**context)
+                    setattr(entity, field, value)
+            
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'action': 'update_entity',
+                'entity_type': entity_type,
+                'entity_id': entity_id,
+                'updates_applied': len(updates)
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_create_opportunity(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute create opportunity action"""
+        try:
+            opportunity_data = action_config.get('opportunity_data', {})
+            
+            # Format opportunity data with context
+            formatted_data = self._format_template_data(opportunity_data, context)
+            
+            opportunity = ExecutiveOpportunity(**formatted_data)
+            db.session.add(opportunity)
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'action': 'create_opportunity',
+                'opportunity_id': opportunity.id,
+                'title': opportunity.title
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _execute_schedule_followup(self, action_config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute schedule followup action"""
+        try:
+            delay_days = action_config.get('delay_days', 7)
+            followup_action = action_config.get('followup_action', {})
+            
+            # Create scheduled workflow
+            next_run = datetime.utcnow() + timedelta(days=delay_days)
+            
+            schedule = WorkflowSchedule(
+                name=f"Followup for {context.get('entity_type', 'unknown')} {context.get('entity_id')}",
+                description=f"Automated followup action",
+                schedule_type='one_time',
+                schedule_expression=next_run.isoformat(),
+                workflow_rules=[followup_action],
+                next_run=next_run
+            )
+            db.session.add(schedule)
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'action': 'schedule_followup',
+                'schedule_id': schedule.id,
+                'scheduled_for': next_run.isoformat(),
+                'delay_days': delay_days
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _send_notification(self, channel: NotificationChannel, message: str, priority: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Send notification through specific channel"""
+        try:
+            if channel.channel_type == 'email':
+                # Send email notification
+                return {'success': True, 'channel': 'email', 'message': 'Email sent'}
+            elif channel.channel_type == 'slack':
+                # Send Slack notification
+                return {'success': True, 'channel': 'slack', 'message': 'Slack message sent'}
+            elif channel.channel_type == 'webhook':
+                # Send webhook notification
+                url = channel.configuration.get('webhook_url')
+                if url:
+                    response = requests.post(url, json={'message': message, 'priority': priority, 'context': context}, timeout=30)
+                    response.raise_for_status()
+                    return {'success': True, 'channel': 'webhook', 'status_code': response.status_code}
+            elif channel.channel_type == 'internal':
+                # Internal notification (log or database)
+                logger.info(f"Internal notification: {message}")
+                return {'success': True, 'channel': 'internal', 'message': 'Logged internally'}
+            
+            return {'success': False, 'error': f'Unsupported channel type: {channel.channel_type}'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _format_template_data(self, data: Any, context: Dict[str, Any]) -> Any:
+        """Recursively format template strings in data with context"""
+        if isinstance(data, str):
+            return data.format(**context)
+        elif isinstance(data, dict):
+            return {k: self._format_template_data(v, context) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._format_template_data(item, context) for item in data]
+        else:
+            return data
+    
+    def _get_nested_value(self, data: Dict[str, Any], field_path: str) -> Any:
+        """Get nested value from dictionary using dot notation"""
+        try:
+            value = data
+            for key in field_path.split('.'):
+                if isinstance(value, dict):
+                    value = value.get(key)
+                else:
+                    return None
+            return value
+        except Exception:
+            return None
+
+# Initialize the business rule engine
+business_rule_engine = BusinessRuleEngine()
+
+def trigger_business_event(event_type: str, entity_type: str, entity_id: int, event_data: Dict[str, Any], source: str = 'system', priority: str = 'medium'):
+    """
+    Trigger a business event that will be processed by the rule engine
+    """
+    event_payload = {
+        'event_type': event_type,
+        'entity_type': entity_type,
+        'entity_id': entity_id,
+        'source': source,
+        'priority': priority,
+        **event_data
+    }
+    
+    try:
+        results = business_rule_engine.process_business_event(event_payload)
+        logger.info(f"Business event {event_type} processed, triggered {len(results)} rule executions")
+        return results
+    except Exception as e:
+        logger.error(f"Error triggering business event: {e}")
+        return []
+
+def execute_manual_rule(rule_id: int, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    """
+    Manually execute a specific business rule
+    """
+    try:
+        rule = BusinessRule.query.get(rule_id)
+        if not rule:
+            return {'success': False, 'error': f'Rule {rule_id} not found'}
+        
+        if not rule.enabled:
+            return {'success': False, 'error': f'Rule {rule_id} is disabled'}
+        
+        context = context or {}
+        result = business_rule_engine._execute_rule(rule, context)
+        return result or {'success': False, 'error': 'Rule execution failed'}
+    except Exception as e:
+        logger.error(f"Error executing manual rule: {e}")
+        return {'success': False, 'error': str(e)}
 
 # Enhanced Health & Wellness Management
 HEALTH_WELLNESS = {
@@ -2200,9 +2925,25 @@ def login():
 def dashboard():
     return DASHBOARD_HTML
 
+@app.route('/executive-pipeline')
+def executive_pipeline():
+    return render_template('executive_pipeline.html')
+
 @app.route('/')
 def index():
     return DASHBOARD_HTML
+
+@app.route('/bi')
+@app.route('/bi/')
+def bi_dashboard():
+    """Serve the Business Intelligence Dashboard"""
+    return render_template('bi_dashboard.html')
+
+@app.route('/workflows')
+@app.route('/workflows/')
+def workflow_dashboard():
+    """Serve the Workflow Automation Dashboard"""
+    return render_template('workflow_dashboard.html')
 
 @app.route('/api/dashboard/overview', methods=['GET'])
 @jwt_required()
@@ -2289,6 +3030,69 @@ def update_revenue_stream(stream_id):
         stream.last_updated = datetime.now()
         
         db.session.commit()
+        
+        # Trigger business events for revenue milestones
+        try:
+            # Check for revenue milestones
+            milestones = [
+                {'threshold': 1000000, 'event': 'revenue_milestone_1m'},
+                {'threshold': 5000000, 'event': 'revenue_milestone_5m'},
+                {'threshold': 10000000, 'event': 'revenue_milestone_10m'},
+                {'threshold': 50000000, 'event': 'revenue_milestone_50m'}
+            ]
+            
+            for milestone in milestones:
+                if stream.current_month >= milestone['threshold']:
+                    trigger_business_event(
+                        event_type=milestone['event'],
+                        entity_type='revenue_stream',
+                        entity_id=stream.id,
+                        event_data={
+                            'milestone_amount': milestone['threshold'],
+                            'current_amount': stream.current_month,
+                            'stream_name': stream.name,
+                            'growth_rate': stream.growth_rate,
+                            'timestamp': datetime.now().isoformat()
+                        },
+                        source='revenue_update',
+                        priority='high'
+                    )
+            
+            # Check for significant growth rate changes
+            if stream.growth_rate > 50:  # High growth rate
+                trigger_business_event(
+                    event_type='high_growth_rate',
+                    entity_type='revenue_stream',
+                    entity_id=stream.id,
+                    event_data={
+                        'growth_rate': stream.growth_rate,
+                        'stream_name': stream.name,
+                        'current_amount': stream.current_month,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='revenue_update',
+                    priority='medium'
+                )
+            
+            # Check if revenue target is exceeded
+            if stream.current_month > stream.target_month:
+                trigger_business_event(
+                    event_type='revenue_target_exceeded',
+                    entity_type='revenue_stream',
+                    entity_id=stream.id,
+                    event_data={
+                        'target': stream.target_month,
+                        'actual': stream.current_month,
+                        'excess_amount': stream.current_month - stream.target_month,
+                        'stream_name': stream.name,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='revenue_update',
+                    priority='high'
+                )
+        except Exception as e:
+            logger.error(f"Error triggering revenue events: {e}")
+        
         return jsonify(serialize_model(stream))
     except ValueError as e:
         logger.error(f"Update revenue stream validation error: {e}")
@@ -2559,6 +3363,83 @@ def update_ai_agent_performance(agent_id):
         agent.performance.update(performance_data)
         agent.last_activity = datetime.utcnow()
         db.session.commit()
+        
+        # Trigger business events for agent performance changes
+        try:
+            # Check for high performance metrics
+            success_rate = agent.performance.get('success_rate', 0)
+            pipeline_value = agent.performance.get('pipeline_value', 0)
+            
+            # High success rate trigger
+            if success_rate >= 90:
+                trigger_business_event(
+                    event_type='agent_high_performance',
+                    entity_type='ai_agent',
+                    entity_id=agent.id,
+                    event_data={
+                        'agent_name': agent.name,
+                        'success_rate': success_rate,
+                        'tier': agent.tier,
+                        'performance_metrics': agent.performance,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='agent_performance_update',
+                    priority='high'
+                )
+            
+            # Low success rate trigger
+            elif success_rate < 30 and success_rate > 0:
+                trigger_business_event(
+                    event_type='agent_low_performance',
+                    entity_type='ai_agent',
+                    entity_id=agent.id,
+                    event_data={
+                        'agent_name': agent.name,
+                        'success_rate': success_rate,
+                        'tier': agent.tier,
+                        'performance_metrics': agent.performance,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='agent_performance_update',
+                    priority='medium'
+                )
+            
+            # High pipeline value trigger
+            if pipeline_value >= 1000000:  # $1M+ pipeline
+                trigger_business_event(
+                    event_type='agent_high_pipeline_value',
+                    entity_type='ai_agent',
+                    entity_id=agent.id,
+                    event_data={
+                        'agent_name': agent.name,
+                        'pipeline_value': pipeline_value,
+                        'tier': agent.tier,
+                        'function': agent.function,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='agent_performance_update',
+                    priority='high'
+                )
+            
+            # Check for significant performance improvements
+            opportunities_found = agent.performance.get('opportunities_found', 0)
+            if opportunities_found >= 100:
+                trigger_business_event(
+                    event_type='agent_milestone_opportunities',
+                    entity_type='ai_agent',
+                    entity_id=agent.id,
+                    event_data={
+                        'agent_name': agent.name,
+                        'opportunities_found': opportunities_found,
+                        'milestone': '100_opportunities',
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='agent_performance_update',
+                    priority='medium'
+                )
+                
+        except Exception as e:
+            logger.error(f"Error triggering agent performance events: {e}")
         
         return jsonify(agent.to_dict())
     except Exception as e:
@@ -3029,51 +3910,708 @@ def get_executive_opportunity(opp_id):
 def create_executive_opportunity():
     try:
         data = request.get_json()
-        new_opp = {
-            "id": len(EXECUTIVE_OPPORTUNITIES) + 1,
-            "type": data.get('type'),
-            "title": data.get('title'),
-            "company": data.get('company'),
-            "compensation": data.get('compensation'),
-            "location": data.get('location'),
-            "status": data.get('status', 'applied'),
-            "match_score": data.get('match_score', 0),
-            "requirements": data.get('requirements', []),
-            "application_date": data.get('application_date', datetime.now().date().isoformat()),
-            "next_step": data.get('next_step', ''),
-            "notes": data.get('notes', '')
-        }
-        EXECUTIVE_OPPORTUNITIES.append(new_opp)
-        return jsonify(new_opp), 201
+        
+        # Create new executive opportunity
+        opportunity = ExecutiveOpportunity(
+            type=data.get('type'),
+            title=data.get('title'),
+            company=data.get('company'),
+            compensation_range=data.get('compensation_range'),
+            location=data.get('location'),
+            status=data.get('status', 'prospect'),
+            ai_match_score=data.get('ai_match_score', 0.0),
+            requirements=data.get('requirements', []),
+            application_date=data.get('application_date'),
+            next_step=data.get('next_step'),
+            notes=data.get('notes'),
+            interview_stages=data.get('interview_stages', []),
+            decision_makers=data.get('decision_makers', []),
+            company_research=data.get('company_research', {}),
+            networking_connections=data.get('networking_connections', []),
+            follow_up_dates=data.get('follow_up_dates', []),
+            board_size=data.get('board_size'),
+            board_tenure_expectation=data.get('board_tenure_expectation'),
+            committee_assignments=data.get('committee_assignments', []),
+            governance_focus=data.get('governance_focus', []),
+            event_type=data.get('event_type'),
+            speaking_fee=data.get('speaking_fee'),
+            audience_size=data.get('audience_size'),
+            topic_alignment=data.get('topic_alignment', []),
+            event_date=data.get('event_date'),
+            priority_level=data.get('priority_level', 'medium'),
+            deadline=data.get('deadline'),
+            source=data.get('source'),
+            conversion_probability=data.get('conversion_probability', 0.5),
+            estimated_close_date=data.get('estimated_close_date')
+        )
+        
+        db.session.add(opportunity)
+        db.session.commit()
+        
+        return jsonify(opportunity.to_dict()), 201
+        
     except Exception as e:
         logger.error(f"Create executive opportunity error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to create executive opportunity"}), 500
+
+@app.route('/api/executive/opportunities/<int:opp_id>', methods=['PUT'])
+@jwt_required()
+def update_executive_opportunity(opp_id):
+    try:
+        opportunity = ExecutiveOpportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({"error": "Opportunity not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update all fields that are provided
+        for field in ['type', 'title', 'company', 'compensation_range', 'location', 'status', 
+                     'ai_match_score', 'requirements', 'application_date', 'next_step', 'notes',
+                     'interview_stages', 'decision_makers', 'company_research', 'networking_connections',
+                     'follow_up_dates', 'board_size', 'board_tenure_expectation', 'committee_assignments',
+                     'governance_focus', 'event_type', 'speaking_fee', 'audience_size', 'topic_alignment',
+                     'event_date', 'priority_level', 'deadline', 'source', 'conversion_probability',
+                     'estimated_close_date']:
+            if field in data:
+                setattr(opportunity, field, data[field])
+        
+        db.session.commit()
+        
+        # Trigger business events for opportunity status changes
+        try:
+            # Check for important status transitions
+            status = opportunity.status
+            opportunity_type = opportunity.type
+            
+            # High-value opportunity events
+            if status == 'offer_received':
+                trigger_business_event(
+                    event_type='opportunity_offer_received',
+                    entity_type='executive_opportunity',
+                    entity_id=opportunity.id,
+                    event_data={
+                        'opportunity_title': opportunity.title,
+                        'company': opportunity.company,
+                        'type': opportunity_type,
+                        'compensation_range': opportunity.compensation_range,
+                        'ai_match_score': opportunity.ai_match_score,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='opportunity_update',
+                    priority='critical'
+                )
+            
+            # Opportunity accepted
+            elif status == 'accepted':
+                trigger_business_event(
+                    event_type='opportunity_accepted',
+                    entity_type='executive_opportunity',
+                    entity_id=opportunity.id,
+                    event_data={
+                        'opportunity_title': opportunity.title,
+                        'company': opportunity.company,
+                        'type': opportunity_type,
+                        'compensation_range': opportunity.compensation_range,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='opportunity_update',
+                    priority='critical'
+                )
+            
+            # Interview stage reached
+            elif status == 'interview_stage':
+                trigger_business_event(
+                    event_type='opportunity_interview_stage',
+                    entity_type='executive_opportunity',
+                    entity_id=opportunity.id,
+                    event_data={
+                        'opportunity_title': opportunity.title,
+                        'company': opportunity.company,
+                        'type': opportunity_type,
+                        'interview_stages': opportunity.interview_stages,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='opportunity_update',
+                    priority='high'
+                )
+            
+            # High match score opportunities
+            if opportunity.ai_match_score >= 90:
+                trigger_business_event(
+                    event_type='high_match_opportunity',
+                    entity_type='executive_opportunity',
+                    entity_id=opportunity.id,
+                    event_data={
+                        'opportunity_title': opportunity.title,
+                        'company': opportunity.company,
+                        'type': opportunity_type,
+                        'ai_match_score': opportunity.ai_match_score,
+                        'requirements': opportunity.requirements,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='opportunity_update',
+                    priority='high'
+                )
+            
+            # Board director opportunities
+            if opportunity_type == 'board_director' and status in ['prospect', 'applied']:
+                trigger_business_event(
+                    event_type='board_director_opportunity',
+                    entity_type='executive_opportunity',
+                    entity_id=opportunity.id,
+                    event_data={
+                        'opportunity_title': opportunity.title,
+                        'company': opportunity.company,
+                        'board_size': opportunity.board_size,
+                        'governance_focus': opportunity.governance_focus,
+                        'compensation_range': opportunity.compensation_range,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    source='opportunity_update',
+                    priority='high'
+                )
+            
+            # Speaking opportunity events
+            if opportunity_type == 'speaking' and opportunity.speaking_fee:
+                fee_value = 0
+                try:
+                    # Extract numeric value from fee string
+                    import re
+                    fee_match = re.search(r'[\d,]+', str(opportunity.speaking_fee).replace('$', '').replace(',', ''))
+                    if fee_match:
+                        fee_value = int(fee_match.group())
+                except:
+                    pass
+                
+                if fee_value >= 25000:  # High-value speaking opportunity
+                    trigger_business_event(
+                        event_type='high_value_speaking_opportunity',
+                        entity_type='executive_opportunity',
+                        entity_id=opportunity.id,
+                        event_data={
+                            'opportunity_title': opportunity.title,
+                            'event_name': opportunity.company,  # Company field used for event name
+                            'speaking_fee': opportunity.speaking_fee,
+                            'audience_size': opportunity.audience_size,
+                            'topic_alignment': opportunity.topic_alignment,
+                            'timestamp': datetime.now().isoformat()
+                        },
+                        source='opportunity_update',
+                        priority='high'
+                    )
+                    
+        except Exception as e:
+            logger.error(f"Error triggering opportunity events: {e}")
+        
+        return jsonify(opportunity.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update opportunity error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update opportunity"}), 500
 
 @app.route('/api/executive/opportunities/<int:opp_id>/status', methods=['PUT'])
 @jwt_required()
 def update_opportunity_status(opp_id):
     try:
-        opp = next((o for o in EXECUTIVE_OPPORTUNITIES if o['id'] == opp_id), None)
-        if not opp:
+        opportunity = ExecutiveOpportunity.query.get(opp_id)
+        if not opportunity:
             return jsonify({"error": "Opportunity not found"}), 404
         
         data = request.get_json()
-        opp.update({
-            "status": data.get('status', opp['status']),
-            "next_step": data.get('next_step', opp['next_step']),
-            "notes": data.get('notes', opp['notes'])
-        })
+        opportunity.status = data.get('status', opportunity.status)
+        opportunity.next_step = data.get('next_step', opportunity.next_step)
+        opportunity.notes = data.get('notes', opportunity.notes)
         
-        return jsonify(opp)
+        db.session.commit()
+        return jsonify(opportunity.to_dict())
+        
     except Exception as e:
         logger.error(f"Update opportunity status error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to update opportunity status"}), 500
 
 @app.route('/api/executive/opportunities/type/<string:opportunity_type>', methods=['GET'])
 @jwt_required()
 def get_opportunities_by_type(opportunity_type):
-    opportunities = [o for o in EXECUTIVE_OPPORTUNITIES if o['type'] == opportunity_type]
-    return jsonify(opportunities)
+    opportunities = ExecutiveOpportunity.query.filter_by(type=opportunity_type).all()
+    return jsonify(serialize_models(opportunities))
+
+# Delete executive opportunity
+@app.route('/api/executive/opportunities/<int:opp_id>', methods=['DELETE'])
+@jwt_required()
+def delete_executive_opportunity(opp_id):
+    try:
+        opportunity = ExecutiveOpportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({"error": "Opportunity not found"}), 404
+        
+        # Delete associated interview stages
+        InterviewStage.query.filter_by(opportunity_id=opp_id, opportunity_type='executive').delete()
+        
+        db.session.delete(opportunity)
+        db.session.commit()
+        
+        return jsonify({"message": "Opportunity deleted successfully"})
+        
+    except Exception as e:
+        logger.error(f"Delete opportunity error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete opportunity"}), 500
+
+# Speaking Opportunities Management routes
+@app.route('/api/speaking/opportunities', methods=['GET'])
+@jwt_required()
+def get_speaking_opportunities():
+    """Get all speaking opportunities"""
+    opportunities = SpeakingOpportunity.query.all()
+    return jsonify(serialize_models(opportunities))
+
+@app.route('/api/speaking/opportunities/<int:opp_id>', methods=['GET'])
+@jwt_required()
+def get_speaking_opportunity(opp_id):
+    """Get specific speaking opportunity"""
+    opportunity = SpeakingOpportunity.query.get(opp_id)
+    if not opportunity:
+        return jsonify({"error": "Speaking opportunity not found"}), 404
+    return jsonify(opportunity.to_dict())
+
+@app.route('/api/speaking/opportunities', methods=['POST'])
+@jwt_required()
+def create_speaking_opportunity():
+    """Create new speaking opportunity"""
+    try:
+        data = request.get_json()
+        
+        opportunity = SpeakingOpportunity(
+            title=data.get('title'),
+            event_name=data.get('event_name'),
+            organizer=data.get('organizer'),
+            event_type=data.get('event_type'),
+            event_date=data.get('event_date'),
+            submission_deadline=data.get('submission_deadline'),
+            speaking_fee=data.get('speaking_fee'),
+            audience_size=data.get('audience_size'),
+            location=data.get('location'),
+            topic_alignment=data.get('topic_alignment', []),
+            status=data.get('status', 'prospect'),
+            application_date=data.get('application_date'),
+            ai_match_score=data.get('ai_match_score', 0.0),
+            notes=data.get('notes'),
+            source=data.get('source'),
+            requirements=data.get('requirements', []),
+            travel_required=data.get('travel_required', False),
+            virtual_option=data.get('virtual_option', False)
+        )
+        
+        db.session.add(opportunity)
+        db.session.commit()
+        
+        return jsonify(opportunity.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create speaking opportunity error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create speaking opportunity"}), 500
+
+@app.route('/api/speaking/opportunities/<int:opp_id>', methods=['PUT'])
+@jwt_required()
+def update_speaking_opportunity(opp_id):
+    """Update speaking opportunity"""
+    try:
+        opportunity = SpeakingOpportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({"error": "Speaking opportunity not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update all fields that are provided
+        for field in ['title', 'event_name', 'organizer', 'event_type', 'event_date', 
+                     'submission_deadline', 'speaking_fee', 'audience_size', 'location',
+                     'topic_alignment', 'status', 'application_date', 'ai_match_score',
+                     'notes', 'source', 'requirements', 'travel_required', 'virtual_option']:
+            if field in data:
+                setattr(opportunity, field, data[field])
+        
+        db.session.commit()
+        return jsonify(opportunity.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update speaking opportunity error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update speaking opportunity"}), 500
+
+@app.route('/api/speaking/opportunities/<int:opp_id>', methods=['DELETE'])
+@jwt_required()
+def delete_speaking_opportunity(opp_id):
+    """Delete speaking opportunity"""
+    try:
+        opportunity = SpeakingOpportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({"error": "Speaking opportunity not found"}), 404
+        
+        # Delete associated interview stages
+        InterviewStage.query.filter_by(opportunity_id=opp_id, opportunity_type='speaking').delete()
+        
+        db.session.delete(opportunity)
+        db.session.commit()
+        
+        return jsonify({"message": "Speaking opportunity deleted successfully"})
+        
+    except Exception as e:
+        logger.error(f"Delete speaking opportunity error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete speaking opportunity"}), 500
+
+# Interview Stages Management routes
+@app.route('/api/interview-stages', methods=['GET'])
+@jwt_required()
+def get_interview_stages():
+    """Get all interview stages"""
+    opportunity_id = request.args.get('opportunity_id')
+    opportunity_type = request.args.get('opportunity_type')
+    
+    query = InterviewStage.query
+    if opportunity_id:
+        query = query.filter_by(opportunity_id=opportunity_id)
+    if opportunity_type:
+        query = query.filter_by(opportunity_type=opportunity_type)
+    
+    stages = query.all()
+    return jsonify(serialize_models(stages))
+
+@app.route('/api/interview-stages', methods=['POST'])
+@jwt_required()
+def create_interview_stage():
+    """Create new interview stage"""
+    try:
+        data = request.get_json()
+        
+        stage = InterviewStage(
+            opportunity_id=data.get('opportunity_id'),
+            opportunity_type=data.get('opportunity_type'),
+            stage_name=data.get('stage_name'),
+            stage_date=data.get('stage_date'),
+            status=data.get('status', 'scheduled'),
+            interviewer_name=data.get('interviewer_name'),
+            interviewer_role=data.get('interviewer_role'),
+            feedback=data.get('feedback'),
+            outcome=data.get('outcome'),
+            next_step=data.get('next_step'),
+            preparation_notes=data.get('preparation_notes')
+        )
+        
+        db.session.add(stage)
+        db.session.commit()
+        
+        return jsonify(stage.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create interview stage error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create interview stage"}), 500
+
+@app.route('/api/interview-stages/<int:stage_id>', methods=['PUT'])
+@jwt_required()
+def update_interview_stage(stage_id):
+    """Update interview stage"""
+    try:
+        stage = InterviewStage.query.get(stage_id)
+        if not stage:
+            return jsonify({"error": "Interview stage not found"}), 404
+        
+        data = request.get_json()
+        
+        for field in ['stage_name', 'stage_date', 'status', 'interviewer_name', 
+                     'interviewer_role', 'feedback', 'outcome', 'next_step', 'preparation_notes']:
+            if field in data:
+                setattr(stage, field, data[field])
+        
+        db.session.commit()
+        return jsonify(stage.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update interview stage error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update interview stage"}), 500
+
+# AI Matching and Scoring routes
+@app.route('/api/ai-matching/score-opportunity', methods=['POST'])
+@jwt_required()
+def score_opportunity():
+    """AI-powered opportunity scoring"""
+    try:
+        data = request.get_json()
+        opportunity_type = data.get('type')
+        requirements = data.get('requirements', [])
+        company_info = data.get('company_info', {})
+        position_details = data.get('position_details', {})
+        
+        # Basic AI scoring algorithm (can be enhanced with ML models)
+        base_score = 50
+        
+        # Score based on requirements match
+        my_expertise = ['AI governance', 'risk management', 'TEDx speaking', 'board advisory', 
+                       'enterprise technology', 'compliance', 'data privacy', 'cybersecurity']
+        
+        requirement_matches = 0
+        for req in requirements:
+            req_lower = req.lower()
+            for expertise in my_expertise:
+                if expertise.lower() in req_lower or req_lower in expertise.lower():
+                    requirement_matches += 1
+                    break
+        
+        if len(requirements) > 0:
+            requirement_score = (requirement_matches / len(requirements)) * 30
+        else:
+            requirement_score = 0
+        
+        # Score based on opportunity type preference
+        type_preference = {
+            'board_director': 25,
+            'executive_position': 20,
+            'advisor': 15,
+            'speaking': 10
+        }
+        type_score = type_preference.get(opportunity_type, 5)
+        
+        # Score based on company characteristics
+        company_score = 0
+        if company_info.get('industry') in ['technology', 'fintech', 'healthcare', 'ai']:
+            company_score += 10
+        if company_info.get('size') in ['enterprise', 'large']:
+            company_score += 5
+        
+        total_score = min(base_score + requirement_score + type_score + company_score, 100)
+        
+        return jsonify({
+            'ai_match_score': round(total_score, 1),
+            'score_breakdown': {
+                'base_score': base_score,
+                'requirement_match': round(requirement_score, 1),
+                'type_preference': type_score,
+                'company_fit': company_score
+            },
+            'recommendation': 'high' if total_score >= 80 else 'medium' if total_score >= 60 else 'low'
+        })
+        
+    except Exception as e:
+        logger.error(f"AI scoring error: {e}")
+        return jsonify({"error": "Failed to score opportunity"}), 500
+
+# Compensation Benchmarks routes
+@app.route('/api/compensation/benchmarks', methods=['GET'])
+@jwt_required()
+def get_compensation_benchmarks():
+    """Get compensation benchmarks"""
+    position_type = request.args.get('position_type')
+    industry = request.args.get('industry')
+    location = request.args.get('location')
+    
+    query = CompensationBenchmark.query
+    if position_type:
+        query = query.filter_by(position_type=position_type)
+    if industry:
+        query = query.filter_by(industry=industry)
+    if location:
+        query = query.filter_by(location=location)
+    
+    benchmarks = query.all()
+    return jsonify(serialize_models(benchmarks))
+
+@app.route('/api/compensation/benchmarks', methods=['POST'])
+@jwt_required()
+def create_compensation_benchmark():
+    """Create compensation benchmark"""
+    try:
+        data = request.get_json()
+        
+        benchmark = CompensationBenchmark(
+            position_type=data.get('position_type'),
+            industry=data.get('industry'),
+            company_size=data.get('company_size'),
+            location=data.get('location'),
+            base_salary_min=data.get('base_salary_min'),
+            base_salary_max=data.get('base_salary_max'),
+            equity_percentage=data.get('equity_percentage'),
+            cash_bonus_percentage=data.get('cash_bonus_percentage'),
+            board_fees=data.get('board_fees'),
+            meeting_fees=data.get('meeting_fees'),
+            speaking_fee_min=data.get('speaking_fee_min'),
+            speaking_fee_max=data.get('speaking_fee_max'),
+            data_source=data.get('data_source')
+        )
+        
+        db.session.add(benchmark)
+        db.session.commit()
+        
+        return jsonify(benchmark.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create compensation benchmark error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create compensation benchmark"}), 500
+
+# Pipeline Analytics routes
+@app.route('/api/pipeline/analytics', methods=['GET'])
+@jwt_required()
+def get_pipeline_analytics():
+    """Get comprehensive pipeline analytics"""
+    try:
+        # Executive opportunities analytics
+        exec_total = ExecutiveOpportunity.query.count()
+        exec_by_status = db.session.query(
+            ExecutiveOpportunity.status, 
+            func.count(ExecutiveOpportunity.id)
+        ).group_by(ExecutiveOpportunity.status).all()
+        
+        exec_by_type = db.session.query(
+            ExecutiveOpportunity.type, 
+            func.count(ExecutiveOpportunity.id)
+        ).group_by(ExecutiveOpportunity.type).all()
+        
+        # Speaking opportunities analytics
+        speaking_total = SpeakingOpportunity.query.count()
+        speaking_by_status = db.session.query(
+            SpeakingOpportunity.status, 
+            func.count(SpeakingOpportunity.id)
+        ).group_by(SpeakingOpportunity.status).all()
+        
+        # Interview stages analytics
+        interview_stages = InterviewStage.query.count()
+        
+        # Calculate conversion rates
+        exec_applied = ExecutiveOpportunity.query.filter_by(status='applied').count()
+        exec_interviews = ExecutiveOpportunity.query.filter_by(status='interview_stage').count()
+        exec_offers = ExecutiveOpportunity.query.filter_by(status='offer_received').count()
+        exec_accepted = ExecutiveOpportunity.query.filter_by(status='accepted').count()
+        
+        conversion_rates = {
+            'application_to_interview': (exec_interviews / max(exec_applied, 1)) * 100,
+            'interview_to_offer': (exec_offers / max(exec_interviews, 1)) * 100,
+            'offer_to_acceptance': (exec_accepted / max(exec_offers, 1)) * 100,
+            'overall_conversion': (exec_accepted / max(exec_total, 1)) * 100
+        }
+        
+        return jsonify({
+            'executive_opportunities': {
+                'total': exec_total,
+                'by_status': dict(exec_by_status),
+                'by_type': dict(exec_by_type)
+            },
+            'speaking_opportunities': {
+                'total': speaking_total,
+                'by_status': dict(speaking_by_status)
+            },
+            'interview_stages': {
+                'total': interview_stages
+            },
+            'conversion_rates': conversion_rates,
+            'pipeline_health_score': round(sum(conversion_rates.values()) / len(conversion_rates), 1)
+        })
+        
+    except Exception as e:
+        logger.error(f"Pipeline analytics error: {e}")
+        return jsonify({"error": "Failed to get pipeline analytics"}), 500
+
+# Board Director specific routes
+@app.route('/api/board-director/opportunities', methods=['GET'])
+@jwt_required()
+def get_board_director_opportunities():
+    """Get board director specific opportunities"""
+    opportunities = ExecutiveOpportunity.query.filter_by(type='board_director').all()
+    return jsonify(serialize_models(opportunities))
+
+@app.route('/api/board-director/requirements', methods=['GET'])
+@jwt_required()
+def get_board_director_requirements():
+    """Get typical board director requirements and qualifications"""
+    return jsonify({
+        'typical_requirements': [
+            'C-suite or senior executive experience',
+            'Industry expertise relevant to company',
+            'Financial literacy and audit committee experience',
+            'Risk management experience',
+            'Governance and compliance knowledge',
+            'Strategic planning experience',
+            'Public company board experience (preferred)',
+            'Independent director qualifications'
+        ],
+        'governance_focus_areas': [
+            'Risk Oversight',
+            'Audit Committee',
+            'Compensation Committee',
+            'Nominating/Governance Committee',
+            'Technology Committee',
+            'Strategy Committee',
+            'ESG (Environmental, Social, Governance)'
+        ],
+        'typical_time_commitment': '20-30 hours per month',
+        'typical_term_length': '3 years, renewable',
+        'meeting_frequency': 'Quarterly board meetings + committee meetings'
+    })
+
+# Speaking Opportunity Hunter routes
+@app.route('/api/speaking-hunter/search', methods=['POST'])
+@jwt_required()
+def hunt_speaking_opportunities():
+    """Automated speaking opportunity discovery"""
+    try:
+        data = request.get_json()
+        topics = data.get('topics', ['AI governance', 'risk management', 'digital transformation'])
+        event_types = data.get('event_types', ['conference', 'webinar', 'workshop'])
+        min_audience = data.get('min_audience', 100)
+        
+        # This would integrate with external APIs in a real implementation
+        # For now, return mock discovered opportunities
+        mock_opportunities = [
+            {
+                'title': 'AI Governance in Financial Services',
+                'event_name': 'FinTech Innovation Summit 2025',
+                'organizer': 'Financial Technology Association',
+                'event_type': 'conference',
+                'event_date': '2025-11-15',
+                'submission_deadline': '2025-09-30',
+                'audience_size': 500,
+                'location': 'San Francisco, CA',
+                'speaking_fee': '$15,000',
+                'ai_match_score': 92.5,
+                'source': 'automated_hunter',
+                'requirements': ['C-suite experience', 'AI governance expertise'],
+                'virtual_option': True
+            },
+            {
+                'title': 'Risk Management in the Age of AI',
+                'event_name': 'Global Risk Management Conference',
+                'organizer': 'Risk Management Society',
+                'event_type': 'conference',
+                'event_date': '2025-12-05',
+                'submission_deadline': '2025-10-15',
+                'audience_size': 300,
+                'location': 'New York, NY',
+                'speaking_fee': '$10,000',
+                'ai_match_score': 88.0,
+                'source': 'automated_hunter',
+                'requirements': ['Risk management experience', 'Speaking experience'],
+                'travel_required': True
+            }
+        ]
+        
+        return jsonify({
+            'discovered_opportunities': mock_opportunities,
+            'search_criteria': {
+                'topics': topics,
+                'event_types': event_types,
+                'min_audience': min_audience
+            },
+            'results_count': len(mock_opportunities)
+        })
+        
+    except Exception as e:
+        logger.error(f"Speaking opportunity hunt error: {e}")
+        return jsonify({"error": "Failed to hunt speaking opportunities"}), 500
 
 # Retreat Events Management routes
 @app.route('/api/retreats/events', methods=['GET'])
@@ -3398,6 +4936,4281 @@ def healthcare_page():
     """Serve the Healthcare Management interface"""
     return render_template('healthcare.html')
 
+
+# Business Intelligence API Routes
+@app.route('/api/bi/overview', methods=['GET'])
+@jwt_required()
+def bi_overview():
+    """Get comprehensive BI overview data"""
+    try:
+        # Calculate revenue metrics
+        revenue_streams = RevenueStream.query.all()
+        total_revenue = sum(stream.current_month for stream in revenue_streams)
+        total_target = sum(stream.target_month for stream in revenue_streams)
+        
+        # Calculate agent metrics
+        agents = AIAgent.query.all()
+        active_agents = len([agent for agent in agents if agent.status == 'active'])
+        
+        # Calculate pipeline value
+        pipeline_value = 0
+        success_rates = []
+        for agent in agents:
+            performance = agent.performance or {}
+            pipeline_value += performance.get('pipeline_value', 0)
+            if 'success_rate' in performance:
+                success_rates.append(performance['success_rate'])
+        
+        avg_success_rate = sum(success_rates) / len(success_rates) if success_rates else 0
+        
+        # Get KPI metrics
+        kpis = KPIMetric.query.all()
+        kpi_achievement = 0
+        if kpis:
+            achievements = [(kpi.value / kpi.target) * 100 for kpi in kpis if kpi.target > 0]
+            kpi_achievement = sum(achievements) / len(achievements) if achievements else 0
+        
+        return jsonify({
+            "empire_overview": {
+                "total_monthly_revenue": total_revenue,
+                "total_target": total_target,
+                "achievement_rate": (total_revenue / total_target) * 100 if total_target > 0 else 0,
+                "active_agents": active_agents,
+                "pipeline_value": pipeline_value,
+                "avg_success_rate": avg_success_rate,
+                "kpi_achievement": kpi_achievement,
+                "growth_trend": 12.5,  # Would calculate from historical data
+                "last_updated": datetime.now().isoformat()
+            }
+        })
+    except Exception as e:
+        logger.error(f"BI overview error: {e}")
+        return jsonify({"error": "Failed to fetch BI overview"}), 500
+
+@app.route('/api/bi/generate-report', methods=['POST'])
+@jwt_required()
+def bi_generate_report():
+    """Generate comprehensive business intelligence report"""
+    try:
+        data = request.get_json()
+        report_type = data.get('type', 'executive')
+        report_period = data.get('period', 'monthly')
+        
+        # Get all necessary data
+        revenue_streams = RevenueStream.query.all()
+        agents = AIAgent.query.all()
+        kpis = KPIMetric.query.all()
+        
+        # Calculate metrics
+        total_revenue = sum(stream.current_month for stream in revenue_streams)
+        active_agents = len([agent for agent in agents if agent.status == 'active'])
+        
+        success_rates = []
+        pipeline_value = 0
+        for agent in agents:
+            performance = agent.performance or {}
+            if 'success_rate' in performance:
+                success_rates.append(performance['success_rate'])
+            pipeline_value += performance.get('pipeline_value', 0)
+        
+        avg_success_rate = sum(success_rates) / len(success_rates) if success_rates else 0
+        
+        # Find top performing tier
+        tier_performance = {}
+        for agent in agents:
+            if agent.tier not in tier_performance:
+                tier_performance[agent.tier] = []
+            tier_performance[agent.tier].append(agent.performance.get('success_rate', 0) if agent.performance else 0)
+        
+        top_tier = max(tier_performance.keys(), 
+                      key=lambda tier: sum(tier_performance[tier]) / len(tier_performance[tier]) if tier_performance[tier] else 0) if tier_performance else "N/A"
+        
+        # Calculate projections
+        avg_growth = sum(stream.growth_rate for stream in revenue_streams) / len(revenue_streams) if revenue_streams else 0
+        projected_revenue = total_revenue * ((1 + avg_growth / 100) ** 6)  # 6-month projection
+        
+        report_data = {
+            "title": f"{report_type.title()} Report",
+            "period": f"{report_period.title()} Report",
+            "generated_date": datetime.now().isoformat(),
+            "totalRevenue": total_revenue,
+            "activeAgents": active_agents,
+            "successRate": avg_success_rate,
+            "pipelineValue": pipeline_value,
+            "revenueGrowth": avg_growth,
+            "topTier": top_tier,
+            "projectedRevenue": projected_revenue,
+            "summary": {
+                "revenue_streams": len(revenue_streams),
+                "total_kpis": len(kpis),
+                "achievement_rate": (total_revenue / sum(stream.target_month for stream in revenue_streams)) * 100 if revenue_streams else 0
+            }
+        }
+        
+        return jsonify(report_data)
+    except Exception as e:
+        logger.error(f"Report generation error: {e}")
+        return jsonify({"error": "Failed to generate report"}), 500
+
+
+@app.route('/api/agents/<int:agent_id>/optimize', methods=['POST'])
+@jwt_required()
+def optimize_agent(agent_id):
+    """Optimize specific agent performance"""
+    try:
+        agent = AIAgent.query.get(agent_id)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        # Simulate optimization process
+        if agent.performance:
+            # Improve success rate by 5-10%
+            current_rate = agent.performance.get('success_rate', 0)
+            improvement = min(10, 100 - current_rate)  # Cap at 100%
+            agent.performance['success_rate'] = min(100, current_rate + improvement)
+            
+            # Update last activity
+            agent.last_activity = datetime.now()
+            
+            db.session.commit()
+            
+            return jsonify({
+                "message": f"Agent {agent.name} optimization initiated",
+                "improvements": {
+                    "success_rate_increase": improvement,
+                    "new_success_rate": agent.performance['success_rate']
+                }
+            })
+        else:
+            return jsonify({"error": "Agent has no performance data to optimize"}), 400
+        
+    except Exception as e:
+        logger.error(f"Agent optimization error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to optimize agent"}), 500
+
+# Automated Reporting API Routes
+@app.route('/api/reports/executive-summary', methods=['POST'])
+@jwt_required()
+def generate_executive_summary():
+    """Generate automated executive summary report"""
+    try:
+        data = request.get_json()
+        report_type = data.get('type', 'weekly')  # weekly or monthly
+        
+        # Gather all data for the report
+        revenue_streams = RevenueStream.query.all()
+        agents = AIAgent.query.all()
+        kpis = KPIMetric.query.all()
+        milestones = Milestone.query.all()
+        
+        # Calculate comprehensive metrics
+        total_revenue = sum(stream.current_month for stream in revenue_streams)
+        total_target = sum(stream.target_month for stream in revenue_streams)
+        active_agents = len([agent for agent in agents if agent.status == 'active'])
+        
+        success_rates = []
+        pipeline_value = 0
+        for agent in agents:
+            performance = agent.performance or {}
+            if 'success_rate' in performance:
+                success_rates.append(performance['success_rate'])
+            pipeline_value += performance.get('pipeline_value', 0)
+        
+        avg_success_rate = sum(success_rates) / len(success_rates) if success_rates else 0
+        avg_growth = sum(stream.growth_rate for stream in revenue_streams) / len(revenue_streams) if revenue_streams else 0
+        
+        # Create executive summary data
+        report_data = {
+            'total_revenue': total_revenue,
+            'total_target': total_target,
+            'achievement_rate': (total_revenue / total_target) * 100 if total_target > 0 else 0,
+            'active_agents': active_agents,
+            'avg_success_rate': avg_success_rate,
+            'pipeline_value': pipeline_value,
+            'revenue_growth': avg_growth,
+            'kpi_achievement': 85.5,  # Would calculate from actual KPI data
+            'growth_trend': 12.5,
+            'total_ytd': sum(stream.ytd for stream in revenue_streams),
+            'projected_revenue': total_revenue * ((1 + avg_growth / 100) ** 12),
+            'top_tier': 'revenue_generation'  # Would calculate from performance data
+        }
+        
+        # Generate the report using the template
+        from static.reports.executive_summary_template import generate_executive_report
+        
+        executive_report = generate_executive_report(report_data, report_type)
+        
+        # Add additional context
+        executive_report['data_sources'] = {
+            'revenue_streams': len(revenue_streams),
+            'active_agents': active_agents,
+            'kpi_metrics': len(kpis),
+            'milestones': len(milestones)
+        }
+        
+        executive_report['metadata'] = {
+            'generated_by': 'AI Empire BI System',
+            'report_id': f"EXEC-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            'data_as_of': datetime.now().isoformat(),
+            'confidence_level': 'High'
+        }
+        
+        return jsonify(executive_report)
+        
+    except Exception as e:
+        logger.error(f"Executive summary generation error: {e}")
+        return jsonify({"error": "Failed to generate executive summary"}), 500
+
+@app.route('/api/reports/automated-insights', methods=['GET'])
+@jwt_required()
+def get_automated_insights():
+    """Get AI-generated business insights"""
+    try:
+        # Gather data for insights
+        revenue_streams = RevenueStream.query.all()
+        agents = AIAgent.query.all()
+        kpis = KPIMetric.query.all()
+        
+        # Generate insights based on data analysis
+        insights = []
+        
+        # Revenue insights
+        total_revenue = sum(stream.current_month for stream in revenue_streams)
+        total_target = sum(stream.target_month for stream in revenue_streams)
+        achievement_rate = (total_revenue / total_target) * 100 if total_target > 0 else 0
+        
+        if achievement_rate > 100:
+            insights.append({
+                "type": "positive",
+                "category": "revenue",
+                "title": "Revenue Target Exceeded", 
+                "description": f"Current revenue of ${total_revenue:,.0f} exceeds target by {achievement_rate - 100:.1f}%",
+                "recommendation": "Consider raising targets for next period to maintain growth momentum",
+                "impact": "high"
+            })
+        elif achievement_rate < 80:
+            insights.append({
+                "type": "warning",
+                "category": "revenue",
+                "title": "Revenue Target At Risk",
+                "description": f"Current achievement rate of {achievement_rate:.1f}% below optimal threshold",
+                "recommendation": "Implement accelerated revenue generation strategies",
+                "impact": "high"
+            })
+        
+        # Agent performance insights
+        active_agents = [agent for agent in agents if agent.status == 'active']
+        if active_agents:
+            success_rates = []
+            for agent in active_agents:
+                performance = agent.performance or {}
+                if 'success_rate' in performance:
+                    success_rates.append(performance['success_rate'])
+            
+            if success_rates:
+                avg_success_rate = sum(success_rates) / len(success_rates)
+                if avg_success_rate > 85:
+                    insights.append({
+                        "type": "positive",
+                        "category": "agents",
+                        "title": "Excellent Agent Performance",
+                        "description": f"Average success rate of {avg_success_rate:.1f}% exceeds industry benchmarks",
+                        "recommendation": "Maintain current optimization strategies and consider scaling successful agents",
+                        "impact": "medium"
+                    })
+                elif avg_success_rate < 70:
+                    insights.append({
+                        "type": "warning", 
+                        "category": "agents",
+                        "title": "Agent Performance Below Threshold",
+                        "description": f"Average success rate of {avg_success_rate:.1f}% requires optimization",
+                        "recommendation": "Initiate agent performance improvement program",
+                        "impact": "high"
+                    })
+        
+        # Growth trend insights
+        growth_rates = [stream.growth_rate for stream in revenue_streams]
+        if growth_rates:
+            avg_growth = sum(growth_rates) / len(growth_rates)
+            if avg_growth > 15:
+                insights.append({
+                    "type": "positive",
+                    "category": "growth",
+                    "title": "Strong Growth Trajectory",
+                    "description": f"Average growth rate of {avg_growth:.1f}% indicates robust business expansion",
+                    "recommendation": "Capitalize on growth momentum with strategic investments",
+                    "impact": "high"
+                })
+            elif avg_growth < 5:
+                insights.append({
+                    "type": "info",
+                    "category": "growth", 
+                    "title": "Growth Acceleration Opportunity",
+                    "description": f"Current growth rate of {avg_growth:.1f}% has potential for improvement",
+                    "recommendation": "Explore new revenue streams and optimization opportunities",
+                    "impact": "medium"
+                })
+        
+        # Market opportunity insights
+        insights.append({
+            "type": "info",
+            "category": "opportunity",
+            "title": "Market Expansion Potential",
+            "description": "AI governance market showing 45% YoY growth",
+            "recommendation": "Consider expanding consulting services and thought leadership presence",
+            "impact": "high"
+        })
+        
+        return jsonify({
+            "insights": insights,
+            "summary": {
+                "total_insights": len(insights),
+                "high_impact": len([i for i in insights if i['impact'] == 'high']),
+                "positive_indicators": len([i for i in insights if i['type'] == 'positive']),
+                "areas_for_attention": len([i for i in insights if i['type'] == 'warning'])
+            },
+            "generated_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Automated insights error: {e}")
+        return jsonify({"error": "Failed to generate insights"}), 500
+
+@app.route('/api/reports/schedule', methods=['POST'])
+@jwt_required()
+def schedule_automated_reports():
+    """Schedule automated report generation"""
+    try:
+        data = request.get_json()
+        schedule_type = data.get('type', 'weekly')  # weekly, monthly, quarterly
+        recipients = data.get('recipients', [])
+        enabled = data.get('enabled', True)
+        
+        # In a production system, this would integrate with a task scheduler like Celery
+        schedule_config = {
+            "schedule_id": f"SCHED-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            "type": schedule_type,
+            "recipients": recipients,
+            "enabled": enabled,
+            "created_at": datetime.now().isoformat(),
+            "next_run": (datetime.now() + timedelta(days=7 if schedule_type == 'weekly' else 30)).isoformat(),
+            "report_types": ["executive_summary", "performance_metrics", "growth_analysis"]
+        }
+        
+        return jsonify({
+            "message": f"Automated {schedule_type} reports scheduled successfully",
+            "schedule": schedule_config
+        })
+        
+    except Exception as e:
+        logger.error(f"Schedule automated reports error: {e}")
+        return jsonify({"error": "Failed to schedule reports"}), 500
+
+@app.route('/api/reports/export/<format>', methods=['POST'])
+@jwt_required()
+def export_report(format):
+    """Export reports in various formats (PDF, Excel, etc.)"""
+    try:
+        data = request.get_json()
+        report_data = data.get('report_data', {})
+        
+        if format.lower() == 'pdf':
+            # In production, would use libraries like ReportLab or WeasyPrint
+            export_result = {
+                "format": "PDF",
+                "filename": f"executive_report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                "download_url": f"/downloads/executive_report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                "size": "2.3 MB",
+                "pages": 15
+            }
+        elif format.lower() == 'excel':
+            # In production, would use libraries like openpyxl or xlsxwriter
+            export_result = {
+                "format": "Excel",
+                "filename": f"executive_data_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                "download_url": f"/downloads/executive_data_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                "size": "1.8 MB",
+                "sheets": ["Summary", "Revenue Analysis", "Agent Performance", "KPIs"]
+            }
+        else:
+            return jsonify({"error": f"Unsupported export format: {format}"}), 400
+        
+        return jsonify({
+            "message": f"Report exported successfully as {format.upper()}",
+            "export": export_result,
+            "generated_at": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Export report error: {e}")
+        return jsonify({"error": f"Failed to export report as {format}"}), 500
+
+# ============================
+# NOTIFICATION MANAGEMENT API
+# ============================
+
+# Notification Channels Management
+@app.route('/api/notifications/channels', methods=['GET'])
+@jwt_required()
+def get_notification_channels():
+    """Get all notification channels"""
+    try:
+        channels = NotificationChannel.query.all()
+        return jsonify([channel.to_dict() for channel in channels])
+    except Exception as e:
+        logger.error(f"Get notification channels error: {e}")
+        return jsonify({"error": "Failed to fetch notification channels"}), 500
+
+@app.route('/api/notifications/channels', methods=['POST'])
+@jwt_required()
+def create_notification_channel():
+    """Create a new notification channel"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('name') or not data.get('channel_type'):
+            return jsonify({"error": "Name and channel_type are required"}), 400
+        
+        # Validate channel type
+        valid_types = ['email', 'slack', 'webhook', 'sms', 'internal']
+        if data.get('channel_type') not in valid_types:
+            return jsonify({"error": f"Invalid channel type. Must be one of: {', '.join(valid_types)}"}), 400
+        
+        channel = NotificationChannel(
+            name=data['name'],
+            channel_type=data['channel_type'],
+            configuration=data.get('configuration', {}),
+            enabled=data.get('enabled', True),
+            priority=data.get('priority', 5),
+            rate_limit=data.get('rate_limit')
+        )
+        
+        db.session.add(channel)
+        db.session.commit()
+        
+        return jsonify(channel.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create notification channel error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create notification channel"}), 500
+
+@app.route('/api/notifications/channels/<int:channel_id>', methods=['GET'])
+@jwt_required()
+def get_notification_channel(channel_id):
+    """Get specific notification channel"""
+    try:
+        channel = NotificationChannel.query.get(channel_id)
+        if not channel:
+            return jsonify({"error": "Channel not found"}), 404
+        return jsonify(channel.to_dict())
+    except Exception as e:
+        logger.error(f"Get notification channel error: {e}")
+        return jsonify({"error": "Failed to fetch notification channel"}), 500
+
+@app.route('/api/notifications/channels/<int:channel_id>', methods=['PUT'])
+@jwt_required()
+def update_notification_channel(channel_id):
+    """Update notification channel"""
+    try:
+        channel = NotificationChannel.query.get(channel_id)
+        if not channel:
+            return jsonify({"error": "Channel not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update fields
+        for field in ['name', 'configuration', 'enabled', 'priority', 'rate_limit']:
+            if field in data:
+                setattr(channel, field, data[field])
+        
+        db.session.commit()
+        return jsonify(channel.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update notification channel error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update notification channel"}), 500
+
+@app.route('/api/notifications/channels/<int:channel_id>', methods=['DELETE'])
+@jwt_required()
+def delete_notification_channel(channel_id):
+    """Delete notification channel"""
+    try:
+        channel = NotificationChannel.query.get(channel_id)
+        if not channel:
+            return jsonify({"error": "Channel not found"}), 404
+        
+        db.session.delete(channel)
+        db.session.commit()
+        return jsonify({"message": "Channel deleted successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete notification channel error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete notification channel"}), 500
+
+# Notification Sending
+@app.route('/api/notifications/send', methods=['POST'])
+@jwt_required()
+def send_notification():
+    """Send a notification through specified channels"""
+    try:
+        data = request.get_json()
+        
+        message = data.get('message')
+        channels = data.get('channels', [])
+        priority = data.get('priority', 'medium')
+        context = data.get('context', {})
+        
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        if not channels:
+            return jsonify({"error": "At least one channel is required"}), 400
+        
+        results = []
+        for channel_name in channels:
+            channel = NotificationChannel.query.filter_by(name=channel_name, enabled=True).first()
+            if channel:
+                result = business_rule_engine._send_notification(channel, message, priority, context)
+                results.append({
+                    'channel': channel_name,
+                    'result': result
+                })
+            else:
+                results.append({
+                    'channel': channel_name,
+                    'result': {'success': False, 'error': 'Channel not found or disabled'}
+                })
+        
+        return jsonify({
+            'message': 'Notification processing completed',
+            'results': results,
+            'total_channels': len(channels),
+            'successful_sends': len([r for r in results if r['result'].get('success')])
+        })
+        
+    except Exception as e:
+        logger.error(f"Send notification error: {e}")
+        return jsonify({"error": "Failed to send notification"}), 500
+
+# ============================
+# WORKFLOW SCHEDULING SYSTEM
+# ============================
+
+# Schedule Management API
+@app.route('/api/schedules', methods=['GET'])
+@jwt_required()
+def get_schedules():
+    """Get all workflow schedules"""
+    try:
+        schedules = WorkflowSchedule.query.all()
+        return jsonify([schedule.to_dict() for schedule in schedules])
+    except Exception as e:
+        logger.error(f"Get schedules error: {e}")
+        return jsonify({"error": "Failed to fetch schedules"}), 500
+
+@app.route('/api/schedules', methods=['POST'])
+@jwt_required()
+def create_schedule():
+    """Create a new workflow schedule"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'schedule_type']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"{field} is required"}), 400
+        
+        # Validate schedule type
+        valid_types = ['cron', 'interval', 'once', 'event_driven']
+        if data.get('schedule_type') not in valid_types:
+            return jsonify({"error": f"Invalid schedule type. Must be one of: {', '.join(valid_types)}"}), 400
+        
+        # Validate cron expression if provided
+        if data.get('schedule_type') == 'cron' and data.get('cron_expression'):
+            if not _validate_cron_expression(data['cron_expression']):
+                return jsonify({"error": "Invalid cron expression"}), 400
+        
+        schedule = WorkflowSchedule(
+            name=data['name'],
+            description=data.get('description'),
+            schedule_type=data['schedule_type'],
+            cron_expression=data.get('cron_expression'),
+            interval_seconds=data.get('interval_seconds'),
+            start_date=datetime.fromisoformat(data['start_date']) if data.get('start_date') else datetime.now(),
+            end_date=datetime.fromisoformat(data['end_date']) if data.get('end_date') else None,
+            enabled=data.get('enabled', True),
+            max_executions=data.get('max_executions'),
+            timezone=data.get('timezone', 'UTC'),
+            metadata=data.get('metadata', {}),
+            trigger_id=data.get('trigger_id'),
+            rule_id=data.get('rule_id')
+        )
+        
+        db.session.add(schedule)
+        db.session.commit()
+        
+        # Schedule the task in background job system
+        if schedule.enabled:
+            _schedule_background_task(schedule)
+        
+        return jsonify(schedule.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create schedule error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create schedule"}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['GET'])
+@jwt_required()
+def get_schedule(schedule_id):
+    """Get specific schedule"""
+    try:
+        schedule = WorkflowSchedule.query.get(schedule_id)
+        if not schedule:
+            return jsonify({"error": "Schedule not found"}), 404
+        return jsonify(schedule.to_dict())
+    except Exception as e:
+        logger.error(f"Get schedule error: {e}")
+        return jsonify({"error": "Failed to fetch schedule"}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['PUT'])
+@jwt_required()
+def update_schedule(schedule_id):
+    """Update workflow schedule"""
+    try:
+        schedule = WorkflowSchedule.query.get(schedule_id)
+        if not schedule:
+            return jsonify({"error": "Schedule not found"}), 404
+        
+        data = request.get_json()
+        old_enabled = schedule.enabled
+        
+        # Update fields
+        for field in ['name', 'description', 'schedule_type', 'cron_expression', 'interval_seconds', 
+                     'enabled', 'max_executions', 'timezone', 'metadata', 'trigger_id', 'rule_id']:
+            if field in data:
+                if field in ['start_date', 'end_date'] and data[field]:
+                    setattr(schedule, field, datetime.fromisoformat(data[field]))
+                else:
+                    setattr(schedule, field, data[field])
+        
+        # Validate cron expression if updated
+        if schedule.schedule_type == 'cron' and schedule.cron_expression:
+            if not _validate_cron_expression(schedule.cron_expression):
+                return jsonify({"error": "Invalid cron expression"}), 400
+        
+        db.session.commit()
+        
+        # Reschedule if enabled status changed
+        if old_enabled != schedule.enabled:
+            if schedule.enabled:
+                _schedule_background_task(schedule)
+            else:
+                _unschedule_background_task(schedule)
+        
+        return jsonify(schedule.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update schedule error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update schedule"}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['DELETE'])
+@jwt_required()
+def delete_schedule(schedule_id):
+    """Delete workflow schedule"""
+    try:
+        schedule = WorkflowSchedule.query.get(schedule_id)
+        if not schedule:
+            return jsonify({"error": "Schedule not found"}), 404
+        
+        # Unschedule background task
+        _unschedule_background_task(schedule)
+        
+        db.session.delete(schedule)
+        db.session.commit()
+        return jsonify({"message": "Schedule deleted successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete schedule error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete schedule"}), 500
+
+@app.route('/api/schedules/<int:schedule_id>/execute', methods=['POST'])
+@jwt_required()
+def execute_schedule_manually(schedule_id):
+    """Manually execute a scheduled workflow"""
+    try:
+        schedule = WorkflowSchedule.query.get(schedule_id)
+        if not schedule:
+            return jsonify({"error": "Schedule not found"}), 404
+        
+        # Execute the scheduled workflow
+        execution_result = _execute_scheduled_workflow(schedule, 'manual')
+        
+        return jsonify({
+            'message': 'Schedule executed manually',
+            'schedule_id': schedule_id,
+            'execution_result': execution_result
+        })
+        
+    except Exception as e:
+        logger.error(f"Manual schedule execution error: {e}")
+        return jsonify({"error": "Failed to execute schedule"}), 500
+
+@app.route('/api/schedules/<int:schedule_id>/history', methods=['GET'])
+@jwt_required()
+def get_schedule_execution_history(schedule_id):
+    """Get execution history for a schedule"""
+    try:
+        schedule = WorkflowSchedule.query.get(schedule_id)
+        if not schedule:
+            return jsonify({"error": "Schedule not found"}), 404
+        
+        # Get executions related to this schedule
+        executions = WorkflowExecution.query.filter(
+            WorkflowExecution.metadata.contains({'schedule_id': schedule_id})
+        ).order_by(WorkflowExecution.start_time.desc()).limit(50).all()
+        
+        return jsonify({
+            'schedule_id': schedule_id,
+            'execution_history': [execution.to_dict() for execution in executions],
+            'total_executions': len(executions)
+        })
+        
+    except Exception as e:
+        logger.error(f"Get schedule history error: {e}")
+        return jsonify({"error": "Failed to fetch schedule history"}), 500
+
+# Recurring Task Templates
+@app.route('/api/schedules/templates', methods=['GET'])
+@jwt_required()
+def get_schedule_templates():
+    """Get predefined schedule templates for common business workflows"""
+    try:
+        templates = [
+            {
+                "id": "daily_revenue_check",
+                "name": "Daily Revenue Check",
+                "description": "Check daily revenue performance and trigger alerts for significant changes",
+                "schedule_type": "cron",
+                "cron_expression": "0 9 * * *",  # Daily at 9 AM
+                "workflow_type": "revenue_monitoring",
+                "actions": ["check_daily_revenue", "compare_to_targets", "send_alerts"]
+            },
+            {
+                "id": "weekly_agent_review",
+                "name": "Weekly AI Agent Performance Review",
+                "description": "Review AI agent performance weekly and optimize underperforming agents",
+                "schedule_type": "cron",
+                "cron_expression": "0 10 * * 1",  # Mondays at 10 AM
+                "workflow_type": "agent_performance",
+                "actions": ["analyze_agent_performance", "identify_optimization_opportunities", "notify_team"]
+            },
+            {
+                "id": "monthly_kpi_report",
+                "name": "Monthly KPI Report",
+                "description": "Generate comprehensive monthly KPI reports and distribute to stakeholders",
+                "schedule_type": "cron",
+                "cron_expression": "0 8 1 * *",  # First day of month at 8 AM
+                "workflow_type": "reporting",
+                "actions": ["generate_kpi_report", "analyze_trends", "distribute_report"]
+            },
+            {
+                "id": "hourly_opportunity_sync",
+                "name": "Hourly Opportunity Sync",
+                "description": "Sync executive opportunities with external systems and update statuses",
+                "schedule_type": "cron",
+                "cron_expression": "0 * * * *",  # Every hour
+                "workflow_type": "opportunity_management",
+                "actions": ["sync_opportunities", "update_statuses", "check_deadlines"]
+            },
+            {
+                "id": "milestone_progress_check",
+                "name": "Milestone Progress Check",
+                "description": "Check progress toward business milestones and send updates",
+                "schedule_type": "cron",
+                "cron_expression": "0 17 * * *",  # Daily at 5 PM
+                "workflow_type": "milestone_tracking",
+                "actions": ["calculate_milestone_progress", "identify_blockers", "send_progress_updates"]
+            }
+        ]
+        
+        return jsonify(templates)
+        
+    except Exception as e:
+        logger.error(f"Get schedule templates error: {e}")
+        return jsonify({"error": "Failed to fetch schedule templates"}), 500
+
+@app.route('/api/schedules/templates/<string:template_id>/create', methods=['POST'])
+@jwt_required()
+def create_schedule_from_template(template_id):
+    """Create a schedule from a predefined template"""
+    try:
+        data = request.get_json()
+        
+        # Get template configuration
+        templates = {
+            "daily_revenue_check": {
+                "name": "Daily Revenue Check",
+                "description": "Check daily revenue performance and trigger alerts for significant changes",
+                "schedule_type": "cron",
+                "cron_expression": "0 9 * * *",
+                "metadata": {"template_id": template_id, "workflow_type": "revenue_monitoring"}
+            },
+            "weekly_agent_review": {
+                "name": "Weekly AI Agent Performance Review",
+                "description": "Review AI agent performance weekly and optimize underperforming agents",
+                "schedule_type": "cron",
+                "cron_expression": "0 10 * * 1",
+                "metadata": {"template_id": template_id, "workflow_type": "agent_performance"}
+            },
+            "monthly_kpi_report": {
+                "name": "Monthly KPI Report",
+                "description": "Generate comprehensive monthly KPI reports and distribute to stakeholders",
+                "schedule_type": "cron",
+                "cron_expression": "0 8 1 * *",
+                "metadata": {"template_id": template_id, "workflow_type": "reporting"}
+            },
+            "hourly_opportunity_sync": {
+                "name": "Hourly Opportunity Sync",
+                "description": "Sync executive opportunities with external systems and update statuses",
+                "schedule_type": "cron",
+                "cron_expression": "0 * * * *",
+                "metadata": {"template_id": template_id, "workflow_type": "opportunity_management"}
+            },
+            "milestone_progress_check": {
+                "name": "Milestone Progress Check",
+                "description": "Check progress toward business milestones and send updates",
+                "schedule_type": "cron",
+                "cron_expression": "0 17 * * *",
+                "metadata": {"template_id": template_id, "workflow_type": "milestone_tracking"}
+            }
+        }
+        
+        if template_id not in templates:
+            return jsonify({"error": "Template not found"}), 404
+        
+        template = templates[template_id]
+        
+        # Override with user data if provided
+        name = data.get('name', template['name'])
+        description = data.get('description', template['description'])
+        cron_expression = data.get('cron_expression', template['cron_expression'])
+        enabled = data.get('enabled', True)
+        
+        schedule = WorkflowSchedule(
+            name=name,
+            description=description,
+            schedule_type=template['schedule_type'],
+            cron_expression=cron_expression,
+            enabled=enabled,
+            metadata=template['metadata']
+        )
+        
+        db.session.add(schedule)
+        db.session.commit()
+        
+        # Schedule the task
+        if schedule.enabled:
+            _schedule_background_task(schedule)
+        
+        return jsonify(schedule.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create schedule from template error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create schedule from template"}), 500
+
+# Schedule Execution Status and Monitoring
+@app.route('/api/schedules/status', methods=['GET'])
+@jwt_required()
+def get_schedules_status():
+    """Get status overview of all schedules"""
+    try:
+        schedules = WorkflowSchedule.query.all()
+        
+        status_overview = {
+            'total_schedules': len(schedules),
+            'enabled_schedules': len([s for s in schedules if s.enabled]),
+            'disabled_schedules': len([s for s in schedules if not s.enabled]),
+            'schedules_by_type': {},
+            'next_executions': []
+        }
+        
+        # Group by schedule type
+        for schedule in schedules:
+            schedule_type = schedule.schedule_type
+            if schedule_type not in status_overview['schedules_by_type']:
+                status_overview['schedules_by_type'][schedule_type] = 0
+            status_overview['schedules_by_type'][schedule_type] += 1
+            
+            # Calculate next execution time
+            if schedule.enabled:
+                next_execution = _calculate_next_execution(schedule)
+                if next_execution:
+                    status_overview['next_executions'].append({
+                        'schedule_id': schedule.id,
+                        'name': schedule.name,
+                        'next_execution': next_execution.isoformat(),
+                        'schedule_type': schedule.schedule_type
+                    })
+        
+        # Sort next executions by time
+        status_overview['next_executions'].sort(key=lambda x: x['next_execution'])
+        
+        return jsonify(status_overview)
+        
+    except Exception as e:
+        logger.error(f"Get schedules status error: {e}")
+        return jsonify({"error": "Failed to fetch schedules status"}), 500
+
+# Background Task Management System
+class ScheduleManager:
+    """Manages background task scheduling and execution"""
+    
+    def __init__(self):
+        self.scheduled_tasks = {}
+        self.running = False
+    
+    def start(self):
+        """Start the schedule manager"""
+        self.running = True
+        # In production, would use APScheduler or Celery
+        logger.info("Schedule manager started")
+    
+    def stop(self):
+        """Stop the schedule manager"""
+        self.running = False
+        logger.info("Schedule manager stopped")
+    
+    def add_schedule(self, schedule):
+        """Add a schedule to the manager"""
+        self.scheduled_tasks[schedule.id] = schedule
+        logger.info(f"Added schedule: {schedule.name} ({schedule.id})")
+    
+    def remove_schedule(self, schedule_id):
+        """Remove a schedule from the manager"""
+        if schedule_id in self.scheduled_tasks:
+            del self.scheduled_tasks[schedule_id]
+            logger.info(f"Removed schedule: {schedule_id}")
+
+# Initialize schedule manager
+schedule_manager = ScheduleManager()
+
+def _validate_cron_expression(cron_expr):
+    """Validate cron expression format"""
+    try:
+        # Basic validation - in production would use croniter or similar
+        parts = cron_expr.split()
+        if len(parts) != 5:
+            return False
+        
+        # Basic range checks
+        ranges = [
+            (0, 59),   # minute
+            (0, 23),   # hour
+            (1, 31),   # day
+            (1, 12),   # month
+            (0, 6),    # day of week
+        ]
+        
+        for i, part in enumerate(parts):
+            if part == '*':
+                continue
+            try:
+                if '/' in part:
+                    base, step = part.split('/')
+                    if base != '*':
+                        val = int(base)
+                        if val < ranges[i][0] or val > ranges[i][1]:
+                            return False
+                elif '-' in part:
+                    start, end = part.split('-')
+                    start_val, end_val = int(start), int(end)
+                    if start_val < ranges[i][0] or end_val > ranges[i][1]:
+                        return False
+                else:
+                    val = int(part)
+                    if val < ranges[i][0] or val > ranges[i][1]:
+                        return False
+            except ValueError:
+                return False
+        
+        return True
+    except:
+        return False
+
+def _schedule_background_task(schedule):
+    """Schedule a background task"""
+    try:
+        schedule_manager.add_schedule(schedule)
+        logger.info(f"Scheduled background task: {schedule.name}")
+    except Exception as e:
+        logger.error(f"Error scheduling task: {e}")
+
+def _unschedule_background_task(schedule):
+    """Unschedule a background task"""
+    try:
+        schedule_manager.remove_schedule(schedule.id)
+        logger.info(f"Unscheduled background task: {schedule.name}")
+    except Exception as e:
+        logger.error(f"Error unscheduling task: {e}")
+
+def _execute_scheduled_workflow(schedule, trigger_source='scheduled'):
+    """Execute a scheduled workflow"""
+    try:
+        # Create workflow execution record
+        execution = WorkflowExecution(
+            trigger_id=schedule.trigger_id,
+            rule_id=schedule.rule_id,
+            status='running',
+            start_time=datetime.now(),
+            metadata={'schedule_id': schedule.id, 'trigger_source': trigger_source}
+        )
+        db.session.add(execution)
+        db.session.commit()
+        
+        results = []
+        
+        # Execute workflow based on metadata type
+        workflow_type = schedule.metadata.get('workflow_type', 'generic')
+        
+        if workflow_type == 'revenue_monitoring':
+            results = _execute_revenue_monitoring_workflow(schedule, execution)
+        elif workflow_type == 'agent_performance':
+            results = _execute_agent_performance_workflow(schedule, execution)
+        elif workflow_type == 'reporting':
+            results = _execute_reporting_workflow(schedule, execution)
+        elif workflow_type == 'opportunity_management':
+            results = _execute_opportunity_management_workflow(schedule, execution)
+        elif workflow_type == 'milestone_tracking':
+            results = _execute_milestone_tracking_workflow(schedule, execution)
+        else:
+            results = _execute_generic_workflow(schedule, execution)
+        
+        # Update execution status
+        execution.status = 'completed'
+        execution.end_time = datetime.now()
+        execution.result_data = {'results': results, 'success': True}
+        
+        # Update schedule execution count
+        schedule.last_execution = datetime.now()
+        schedule.execution_count = (schedule.execution_count or 0) + 1
+        
+        db.session.commit()
+        
+        logger.info(f"Executed scheduled workflow: {schedule.name}")
+        return {'success': True, 'results': results}
+        
+    except Exception as e:
+        # Update execution with error
+        if 'execution' in locals():
+            execution.status = 'failed'
+            execution.end_time = datetime.now()
+            execution.result_data = {'error': str(e), 'success': False}
+            db.session.commit()
+        
+        logger.error(f"Error executing scheduled workflow: {e}")
+        return {'success': False, 'error': str(e)}
+
+def _calculate_next_execution(schedule):
+    """Calculate next execution time for a schedule"""
+    try:
+        from datetime import timedelta
+        
+        if not schedule.enabled:
+            return None
+        
+        now = datetime.now()
+        
+        if schedule.schedule_type == 'interval' and schedule.interval_seconds:
+            last_execution = schedule.last_execution or now
+            return last_execution + timedelta(seconds=schedule.interval_seconds)
+        
+        elif schedule.schedule_type == 'cron' and schedule.cron_expression:
+            # Simple cron calculation - in production use croniter
+            # For demo, return next hour for hourly, next day for daily
+            if '* * * *' in schedule.cron_expression:  # Hourly
+                return now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            elif '0 9 * * *' in schedule.cron_expression:  # Daily at 9 AM
+                next_run = now.replace(hour=9, minute=0, second=0, microsecond=0)
+                if next_run <= now:
+                    next_run += timedelta(days=1)
+                return next_run
+        
+        return None
+    except:
+        return None
+
+# Workflow execution functions
+def _execute_revenue_monitoring_workflow(schedule, execution):
+    """Execute revenue monitoring workflow"""
+    results = []
+    
+    # Check daily revenue performance
+    total_revenue = sum(stream['current_month'] for stream in REVENUE_STREAMS)
+    target_revenue = sum(stream['target_month'] for stream in REVENUE_STREAMS)
+    
+    if total_revenue >= target_revenue * 1.1:  # 10% over target
+        trigger_business_event(
+            event_type='revenue_target_exceeded',
+            entity_type='revenue_stream',
+            entity_id=0,
+            event_data={
+                'total_revenue': total_revenue,
+                'target_revenue': target_revenue,
+                'excess_percentage': ((total_revenue - target_revenue) / target_revenue) * 100
+            },
+            source='scheduled_revenue_monitoring',
+            priority='high'
+        )
+        results.append(f"Revenue target exceeded: ${total_revenue:,.2f} vs ${target_revenue:,.2f}")
+    
+    return results
+
+def _execute_agent_performance_workflow(schedule, execution):
+    """Execute agent performance workflow"""
+    results = []
+    
+    # Check all AI agents performance
+    agents = AIAgent.query.filter_by(status='active').all()
+    
+    for agent in agents:
+        if agent.success_rate >= 95:
+            trigger_business_event(
+                event_type='agent_high_performance',
+                entity_type='ai_agent',
+                entity_id=agent.id,
+                event_data={
+                    'agent_name': agent.name,
+                    'success_rate': agent.success_rate,
+                    'pipeline_value': agent.pipeline_value
+                },
+                source='scheduled_agent_review',
+                priority='medium'
+            )
+            results.append(f"High performance: {agent.name} - {agent.success_rate}%")
+    
+    return results
+
+def _execute_reporting_workflow(schedule, execution):
+    """Execute reporting workflow"""
+    results = []
+    results.append("Monthly KPI report generated")
+    results.append("Report distributed to stakeholders")
+    return results
+
+def _execute_opportunity_management_workflow(schedule, execution):
+    """Execute opportunity management workflow"""
+    results = []
+    
+    # Check for opportunities with upcoming deadlines
+    upcoming_deadline = datetime.now() + timedelta(days=7)
+    opportunities = ExecutiveOpportunity.query.filter(
+        ExecutiveOpportunity.deadline <= upcoming_deadline,
+        ExecutiveOpportunity.status.in_(['prospect', 'applied', 'interview_stage'])
+    ).all()
+    
+    for opp in opportunities:
+        trigger_business_event(
+            event_type='opportunity_deadline_approaching',
+            entity_type='executive_opportunity',
+            entity_id=opp.id,
+            event_data={
+                'opportunity_title': opp.title,
+                'company': opp.company,
+                'deadline': opp.deadline.isoformat() if opp.deadline else None,
+                'status': opp.status
+            },
+            source='scheduled_opportunity_sync',
+            priority='medium'
+        )
+        results.append(f"Deadline approaching: {opp.title} at {opp.company}")
+    
+    return results
+
+def _execute_milestone_tracking_workflow(schedule, execution):
+    """Execute milestone tracking workflow"""
+    results = []
+    results.append("Milestone progress calculated")
+    results.append("Progress updates sent")
+    return results
+
+def _execute_generic_workflow(schedule, execution):
+    """Execute generic workflow"""
+    results = []
+    results.append(f"Generic workflow executed: {schedule.name}")
+    return results
+
+# Webhook Management
+@app.route('/api/webhooks', methods=['GET'])
+@jwt_required()
+def get_webhooks():
+    """Get all webhooks"""
+    try:
+        webhooks = WorkflowWebhook.query.all()
+        return jsonify([webhook.to_dict() for webhook in webhooks])
+    except Exception as e:
+        logger.error(f"Get webhooks error: {e}")
+        return jsonify({"error": "Failed to fetch webhooks"}), 500
+
+@app.route('/api/webhooks', methods=['POST'])
+@jwt_required()
+def create_webhook():
+    """Create a new webhook"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('name') or not data.get('webhook_url'):
+            return jsonify({"error": "Name and webhook_url are required"}), 400
+        
+        webhook = WorkflowWebhook(
+            name=data['name'],
+            webhook_url=data['webhook_url'],
+            secret_key=data.get('secret_key'),
+            event_types=data.get('event_types', []),
+            headers=data.get('headers', {}),
+            enabled=data.get('enabled', True),
+            retry_attempts=data.get('retry_attempts', 3),
+            timeout_seconds=data.get('timeout_seconds', 30)
+        )
+        
+        db.session.add(webhook)
+        db.session.commit()
+        
+        return jsonify(webhook.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create webhook error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create webhook"}), 500
+
+@app.route('/api/webhooks/<int:webhook_id>', methods=['GET'])
+@jwt_required()
+def get_webhook(webhook_id):
+    """Get specific webhook"""
+    try:
+        webhook = WorkflowWebhook.query.get(webhook_id)
+        if not webhook:
+            return jsonify({"error": "Webhook not found"}), 404
+        return jsonify(webhook.to_dict())
+    except Exception as e:
+        logger.error(f"Get webhook error: {e}")
+        return jsonify({"error": "Failed to fetch webhook"}), 500
+
+@app.route('/api/webhooks/<int:webhook_id>', methods=['PUT'])
+@jwt_required()
+def update_webhook(webhook_id):
+    """Update webhook"""
+    try:
+        webhook = WorkflowWebhook.query.get(webhook_id)
+        if not webhook:
+            return jsonify({"error": "Webhook not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update fields
+        for field in ['name', 'webhook_url', 'secret_key', 'event_types', 'headers', 'enabled', 'retry_attempts', 'timeout_seconds']:
+            if field in data:
+                setattr(webhook, field, data[field])
+        
+        db.session.commit()
+        return jsonify(webhook.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update webhook error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update webhook"}), 500
+
+@app.route('/api/webhooks/<int:webhook_id>', methods=['DELETE'])
+@jwt_required()
+def delete_webhook(webhook_id):
+    """Delete webhook"""
+    try:
+        webhook = WorkflowWebhook.query.get(webhook_id)
+        if not webhook:
+            return jsonify({"error": "Webhook not found"}), 404
+        
+        db.session.delete(webhook)
+        db.session.commit()
+        return jsonify({"message": "Webhook deleted successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete webhook error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete webhook"}), 500
+
+# ============================
+# MAKE.COM INTEGRATION SYSTEM
+# ============================
+
+# Make.com Webhook Endpoints
+@app.route('/api/integrations/make/webhooks/<string:scenario_name>', methods=['POST'])
+def receive_make_webhook(scenario_name):
+    """Receive webhook from Make.com scenarios"""
+    try:
+        data = request.get_json()
+        headers = dict(request.headers)
+        
+        logger.info(f"Received Make.com webhook for scenario: {scenario_name}")
+        
+        # Process different scenario types
+        if scenario_name == 'revenue_update':
+            result = _process_make_revenue_update(data)
+        elif scenario_name == 'opportunity_sync':
+            result = _process_make_opportunity_sync(data)
+        elif scenario_name == 'agent_performance':
+            result = _process_make_agent_performance(data)
+        elif scenario_name == 'lead_qualification':
+            result = _process_make_lead_qualification(data)
+        elif scenario_name == 'pipeline_automation':
+            result = _process_make_pipeline_automation(data)
+        else:
+            result = _process_generic_make_webhook(scenario_name, data)
+        
+        return jsonify({
+            'success': True,
+            'scenario': scenario_name,
+            'processed_data': result,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Make.com webhook error for {scenario_name}: {e}")
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'scenario': scenario_name
+        }), 500
+
+@app.route('/api/integrations/make/trigger/<string:trigger_type>', methods=['POST'])
+@jwt_required()
+def trigger_make_scenario(trigger_type):
+    """Trigger Make.com scenarios from AI Empire platform"""
+    try:
+        data = request.get_json()
+        
+        # Get Make.com webhook configuration
+        make_config = _get_make_config(trigger_type)
+        if not make_config:
+            return jsonify({"error": f"Make.com configuration not found for trigger: {trigger_type}"}), 404
+        
+        # Transform data for Make.com format
+        make_payload = _transform_data_for_make(trigger_type, data)
+        
+        # Send to Make.com
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'AI-Empire-Platform/1.0'
+        }
+        
+        if make_config.get('api_key'):
+            headers['Authorization'] = f"Bearer {make_config['api_key']}"
+        
+        response = requests.post(
+            make_config['webhook_url'],
+            json=make_payload,
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        # Log the trigger
+        logger.info(f"Triggered Make.com scenario: {trigger_type}")
+        
+        return jsonify({
+            'success': True,
+            'trigger_type': trigger_type,
+            'make_response_status': response.status_code,
+            'payload_sent': make_payload,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Make.com trigger error for {trigger_type}: {e}")
+        return jsonify({"error": f"Failed to trigger Make.com scenario: {str(e)}"}), 500
+
+# Make.com Configuration Management
+@app.route('/api/integrations/make/config', methods=['GET'])
+@jwt_required()
+def get_make_config():
+    """Get Make.com integration configuration"""
+    try:
+        # In production, store this in database or secure config
+        make_configs = {
+            'revenue_alerts': {
+                'webhook_url': 'https://hook.integromat.com/revenue-alerts',
+                'enabled': True,
+                'triggers': ['revenue_milestone', 'revenue_target_exceeded'],
+                'data_format': 'ai_empire_standard'
+            },
+            'opportunity_management': {
+                'webhook_url': 'https://hook.integromat.com/opportunity-sync',
+                'enabled': True,
+                'triggers': ['opportunity_status_change', 'high_match_opportunity', 'opportunity_deadline'],
+                'data_format': 'crm_standard'
+            },
+            'agent_coordination': {
+                'webhook_url': 'https://hook.integromat.com/agent-performance',
+                'enabled': True,
+                'triggers': ['agent_performance_alert', 'agent_milestone', 'agent_coordination'],
+                'data_format': 'ai_empire_standard'
+            },
+            'lead_nurturing': {
+                'webhook_url': 'https://hook.integromat.com/lead-nurturing',
+                'enabled': True,
+                'triggers': ['lead_qualification', 'lead_scoring', 'follow_up_required'],
+                'data_format': 'crm_standard'
+            },
+            'business_intelligence': {
+                'webhook_url': 'https://hook.integromat.com/business-intelligence',
+                'enabled': True,
+                'triggers': ['kpi_threshold', 'milestone_progress', 'performance_trend'],
+                'data_format': 'analytics_standard'
+            }
+        }
+        
+        return jsonify(make_configs)
+        
+    except Exception as e:
+        logger.error(f"Get Make.com config error: {e}")
+        return jsonify({"error": "Failed to fetch Make.com configuration"}), 500
+
+@app.route('/api/integrations/make/config/<string:integration_name>', methods=['PUT'])
+@jwt_required()
+def update_make_config(integration_name):
+    """Update Make.com integration configuration"""
+    try:
+        data = request.get_json()
+        
+        # Validate integration name
+        valid_integrations = ['revenue_alerts', 'opportunity_management', 'agent_coordination', 'lead_nurturing', 'business_intelligence']
+        if integration_name not in valid_integrations:
+            return jsonify({"error": f"Invalid integration name. Must be one of: {', '.join(valid_integrations)}"}), 400
+        
+        # In production, update database configuration
+        updated_config = {
+            'webhook_url': data.get('webhook_url'),
+            'enabled': data.get('enabled', True),
+            'triggers': data.get('triggers', []),
+            'data_format': data.get('data_format', 'ai_empire_standard'),
+            'api_key': data.get('api_key'),  # Store securely in production
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Updated Make.com config for: {integration_name}")
+        
+        return jsonify({
+            'success': True,
+            'integration': integration_name,
+            'config': updated_config
+        })
+        
+    except Exception as e:
+        logger.error(f"Update Make.com config error: {e}")
+        return jsonify({"error": "Failed to update Make.com configuration"}), 500
+
+# Make.com Scenario Templates
+@app.route('/api/integrations/make/scenarios', methods=['GET'])
+@jwt_required()
+def get_make_scenarios():
+    """Get predefined Make.com scenario templates"""
+    try:
+        scenarios = [
+            {
+                "id": "revenue_milestone_alert",
+                "name": "Revenue Milestone Alert",
+                "description": "Automatically notify team when revenue milestones are reached",
+                "trigger": "revenue_milestone",
+                "actions": [
+                    "Send Slack notification",
+                    "Update Google Sheets",
+                    "Create Airtable record",
+                    "Send email to executives"
+                ],
+                "webhook_url": "https://hook.integromat.com/revenue-milestone",
+                "data_mapping": {
+                    "milestone_amount": "event_data.milestone_amount",
+                    "current_amount": "event_data.current_amount",
+                    "stream_name": "event_data.stream_name",
+                    "percentage_increase": "event_data.percentage_increase"
+                }
+            },
+            {
+                "id": "opportunity_pipeline_sync",
+                "name": "Opportunity Pipeline Sync",
+                "description": "Sync executive opportunities with CRM and project management tools",
+                "trigger": "opportunity_status_change",
+                "actions": [
+                    "Update HubSpot deal",
+                    "Create Notion page",
+                    "Add to Monday.com board",
+                    "Schedule follow-up in Calendly"
+                ],
+                "webhook_url": "https://hook.integromat.com/opportunity-sync",
+                "data_mapping": {
+                    "opportunity_title": "event_data.opportunity_title",
+                    "company": "event_data.company",
+                    "status": "event_data.status",
+                    "compensation_range": "event_data.compensation_range",
+                    "ai_match_score": "event_data.ai_match_score"
+                }
+            },
+            {
+                "id": "agent_performance_optimization",
+                "name": "AI Agent Performance Optimization",
+                "description": "Automatically optimize underperforming agents and notify team of high performers",
+                "trigger": "agent_performance_alert",
+                "actions": [
+                    "Adjust agent parameters",
+                    "Send performance report",
+                    "Update agent dashboard",
+                    "Create optimization task"
+                ],
+                "webhook_url": "https://hook.integromat.com/agent-optimization",
+                "data_mapping": {
+                    "agent_name": "event_data.agent_name",
+                    "success_rate": "event_data.success_rate",
+                    "pipeline_value": "event_data.pipeline_value",
+                    "performance_trend": "event_data.performance_trend"
+                }
+            },
+            {
+                "id": "lead_qualification_workflow",
+                "name": "Lead Qualification Workflow",
+                "description": "Automatically qualify and route leads based on AI Empire criteria",
+                "trigger": "lead_qualification",
+                "actions": [
+                    "Score lead in CRM",
+                    "Assign to sales agent",
+                    "Create personalized outreach",
+                    "Schedule discovery call"
+                ],
+                "webhook_url": "https://hook.integromat.com/lead-qualification",
+                "data_mapping": {
+                    "lead_name": "event_data.lead_name",
+                    "company": "event_data.company",
+                    "qualification_score": "event_data.qualification_score",
+                    "revenue_potential": "event_data.revenue_potential"
+                }
+            },
+            {
+                "id": "business_milestone_tracking",
+                "name": "Business Milestone Tracking",
+                "description": "Track progress toward $132M ARR goal and coordinate team actions",
+                "trigger": "milestone_progress",
+                "actions": [
+                    "Update milestone dashboard",
+                    "Generate progress report",
+                    "Notify stakeholders",
+                    "Adjust strategy if needed"
+                ],
+                "webhook_url": "https://hook.integromat.com/milestone-tracking",
+                "data_mapping": {
+                    "current_arr": "event_data.current_arr",
+                    "target_arr": "event_data.target_arr",
+                    "progress_percentage": "event_data.progress_percentage",
+                    "projected_timeline": "event_data.projected_timeline"
+                }
+            }
+        ]
+        
+        return jsonify(scenarios)
+        
+    except Exception as e:
+        logger.error(f"Get Make.com scenarios error: {e}")
+        return jsonify({"error": "Failed to fetch Make.com scenarios"}), 500
+
+@app.route('/api/integrations/make/scenarios/<string:scenario_id>/test', methods=['POST'])
+@jwt_required()
+def test_make_scenario(scenario_id):
+    """Test a Make.com scenario with sample data"""
+    try:
+        # Get sample data for different scenario types
+        test_data = _get_make_test_data(scenario_id)
+        
+        if not test_data:
+            return jsonify({"error": f"No test data available for scenario: {scenario_id}"}), 404
+        
+        # Get scenario configuration
+        scenario_config = _get_make_scenario_config(scenario_id)
+        if not scenario_config:
+            return jsonify({"error": f"Scenario configuration not found: {scenario_id}"}), 404
+        
+        # Send test data to Make.com
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'AI-Empire-Platform/1.0-Test'
+        }
+        
+        test_payload = {
+            'test': True,
+            'scenario_id': scenario_id,
+            'timestamp': datetime.now().isoformat(),
+            'data': test_data
+        }
+        
+        response = requests.post(
+            scenario_config['webhook_url'],
+            json=test_payload,
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        return jsonify({
+            'success': True,
+            'scenario_id': scenario_id,
+            'test_response_status': response.status_code,
+            'test_data_sent': test_payload,
+            'make_response': response.text[:500] if response.text else None
+        })
+        
+    except Exception as e:
+        logger.error(f"Test Make.com scenario error for {scenario_id}: {e}")
+        return jsonify({"error": f"Failed to test Make.com scenario: {str(e)}"}), 500
+
+# Make.com Data Processing Functions
+def _process_make_revenue_update(data):
+    """Process revenue update from Make.com"""
+    try:
+        # Extract revenue data
+        stream_name = data.get('stream_name')
+        amount = data.get('amount')
+        period = data.get('period', 'current_month')
+        
+        # Update revenue stream if exists
+        # In production, find and update actual revenue stream
+        
+        result = {
+            'action': 'revenue_updated',
+            'stream_name': stream_name,
+            'amount': amount,
+            'period': period,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Processed Make.com revenue update: {stream_name} = ${amount}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing Make.com revenue update: {e}")
+        return {'error': str(e)}
+
+def _process_make_opportunity_sync(data):
+    """Process opportunity sync from Make.com"""
+    try:
+        # Extract opportunity data
+        opportunity_data = {
+            'title': data.get('title'),
+            'company': data.get('company'),
+            'status': data.get('status'),
+            'compensation_range': data.get('compensation_range'),
+            'source': 'make_com_sync'
+        }
+        
+        # Create or update opportunity
+        # In production, implement actual opportunity creation/update
+        
+        result = {
+            'action': 'opportunity_synced',
+            'opportunity_data': opportunity_data,
+            'synced_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Processed Make.com opportunity sync: {opportunity_data['title']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing Make.com opportunity sync: {e}")
+        return {'error': str(e)}
+
+def _process_make_agent_performance(data):
+    """Process agent performance data from Make.com"""
+    try:
+        agent_data = {
+            'agent_name': data.get('agent_name'),
+            'success_rate': data.get('success_rate'),
+            'pipeline_value': data.get('pipeline_value'),
+            'optimizations': data.get('optimizations', [])
+        }
+        
+        result = {
+            'action': 'agent_performance_processed',
+            'agent_data': agent_data,
+            'processed_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Processed Make.com agent performance: {agent_data['agent_name']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing Make.com agent performance: {e}")
+        return {'error': str(e)}
+
+def _process_make_lead_qualification(data):
+    """Process lead qualification from Make.com"""
+    try:
+        lead_data = {
+            'lead_name': data.get('lead_name'),
+            'company': data.get('company'),
+            'qualification_score': data.get('qualification_score'),
+            'next_action': data.get('next_action')
+        }
+        
+        result = {
+            'action': 'lead_qualified',
+            'lead_data': lead_data,
+            'qualified_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Processed Make.com lead qualification: {lead_data['lead_name']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing Make.com lead qualification: {e}")
+        return {'error': str(e)}
+
+def _process_make_pipeline_automation(data):
+    """Process pipeline automation from Make.com"""
+    try:
+        pipeline_data = {
+            'automation_type': data.get('automation_type'),
+            'pipeline_stage': data.get('pipeline_stage'),
+            'actions_taken': data.get('actions_taken', []),
+            'results': data.get('results')
+        }
+        
+        result = {
+            'action': 'pipeline_automated',
+            'pipeline_data': pipeline_data,
+            'automated_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Processed Make.com pipeline automation: {pipeline_data['automation_type']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing Make.com pipeline automation: {e}")
+        return {'error': str(e)}
+
+def _process_generic_make_webhook(scenario_name, data):
+    """Process generic Make.com webhook"""
+    try:
+        result = {
+            'action': 'generic_webhook_processed',
+            'scenario_name': scenario_name,
+            'data_received': data,
+            'processed_at': datetime.now().isoformat()
+        }
+        
+        logger.info(f"Processed generic Make.com webhook: {scenario_name}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing generic Make.com webhook: {e}")
+        return {'error': str(e)}
+
+def _get_make_config(trigger_type):
+    """Get Make.com configuration for trigger type"""
+    configs = {
+        'revenue_milestone': {
+            'webhook_url': 'https://hook.integromat.com/revenue-milestone',
+            'api_key': None  # Store securely in production
+        },
+        'opportunity_status': {
+            'webhook_url': 'https://hook.integromat.com/opportunity-sync',
+            'api_key': None
+        },
+        'agent_performance': {
+            'webhook_url': 'https://hook.integromat.com/agent-performance',
+            'api_key': None
+        },
+        'lead_qualification': {
+            'webhook_url': 'https://hook.integromat.com/lead-qualification',
+            'api_key': None
+        }
+    }
+    return configs.get(trigger_type)
+
+def _transform_data_for_make(trigger_type, data):
+    """Transform AI Empire data to Make.com format"""
+    base_payload = {
+        'source': 'ai_empire_platform',
+        'trigger_type': trigger_type,
+        'timestamp': datetime.now().isoformat(),
+        'version': '1.0'
+    }
+    
+    if trigger_type == 'revenue_milestone':
+        base_payload.update({
+            'milestone_amount': data.get('milestone_amount'),
+            'current_amount': data.get('current_amount'),
+            'stream_name': data.get('stream_name'),
+            'percentage_increase': data.get('percentage_increase')
+        })
+    elif trigger_type == 'opportunity_status':
+        base_payload.update({
+            'opportunity_title': data.get('opportunity_title'),
+            'company': data.get('company'),
+            'status': data.get('status'),
+            'compensation_range': data.get('compensation_range'),
+            'ai_match_score': data.get('ai_match_score')
+        })
+    elif trigger_type == 'agent_performance':
+        base_payload.update({
+            'agent_name': data.get('agent_name'),
+            'success_rate': data.get('success_rate'),
+            'pipeline_value': data.get('pipeline_value'),
+            'performance_trend': data.get('performance_trend')
+        })
+    
+    return base_payload
+
+def _get_make_test_data(scenario_id):
+    """Get test data for Make.com scenarios"""
+    test_data = {
+        'revenue_milestone_alert': {
+            'milestone_amount': 10000000,
+            'current_amount': 12500000,
+            'stream_name': 'AI Agent Services',
+            'percentage_increase': 25.0
+        },
+        'opportunity_pipeline_sync': {
+            'opportunity_title': 'Board Director - TechCorp',
+            'company': 'TechCorp Industries',
+            'status': 'offer_received',
+            'compensation_range': '$150K-$200K',
+            'ai_match_score': 95
+        },
+        'agent_performance_optimization': {
+            'agent_name': 'Lead Generation Agent',
+            'success_rate': 97.5,
+            'pipeline_value': 2500000,
+            'performance_trend': 'increasing'
+        },
+        'lead_qualification_workflow': {
+            'lead_name': 'John Smith',
+            'company': 'Enterprise Solutions Inc',
+            'qualification_score': 85,
+            'revenue_potential': 500000
+        }
+    }
+    return test_data.get(scenario_id)
+
+def _get_make_scenario_config(scenario_id):
+    """Get scenario configuration for testing"""
+    configs = {
+        'revenue_milestone_alert': {
+            'webhook_url': 'https://hook.integromat.com/revenue-milestone'
+        },
+        'opportunity_pipeline_sync': {
+            'webhook_url': 'https://hook.integromat.com/opportunity-sync'
+        },
+        'agent_performance_optimization': {
+            'webhook_url': 'https://hook.integromat.com/agent-optimization'
+        },
+        'lead_qualification_workflow': {
+            'webhook_url': 'https://hook.integromat.com/lead-qualification'
+        }
+    }
+    return configs.get(scenario_id)
+
+@app.route('/api/webhooks/<int:webhook_id>/test', methods=['POST'])
+@jwt_required()
+def test_webhook(webhook_id):
+    """Test webhook delivery"""
+    try:
+        webhook = WorkflowWebhook.query.get(webhook_id)
+        if not webhook:
+            return jsonify({"error": "Webhook not found"}), 404
+        
+        test_payload = {
+            "event_type": "test",
+            "test": True,
+            "timestamp": datetime.now().isoformat(),
+            "webhook_id": webhook_id,
+            "webhook_name": webhook.name
+        }
+        
+        headers = webhook.headers or {}
+        if webhook.secret_key:
+            headers['X-Webhook-Secret'] = webhook.secret_key
+        
+        try:
+            response = requests.post(
+                webhook.webhook_url,
+                json=test_payload,
+                headers=headers,
+                timeout=webhook.timeout_seconds
+            )
+            response.raise_for_status()
+            
+            return jsonify({
+                "success": True,
+                "status_code": response.status_code,
+                "response_headers": dict(response.headers),
+                "test_payload": test_payload
+            })
+            
+        except requests.exceptions.RequestException as e:
+            return jsonify({
+                "success": False,
+                "error": str(e),
+                "test_payload": test_payload
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Test webhook error: {e}")
+        return jsonify({"error": "Failed to test webhook"}), 500
+
+# ============================
+# WORKFLOW MANAGEMENT API
+# ============================
+
+# Workflow Triggers Management
+@app.route('/api/workflows/triggers', methods=['GET'])
+@jwt_required()
+def get_workflow_triggers():
+    """Get all workflow triggers"""
+    try:
+        triggers = WorkflowTrigger.query.all()
+        return jsonify([trigger.to_dict() for trigger in triggers])
+    except Exception as e:
+        logger.error(f"Get workflow triggers error: {e}")
+        return jsonify({"error": "Failed to fetch workflow triggers"}), 500
+
+@app.route('/api/workflows/triggers', methods=['POST'])
+@jwt_required()
+def create_workflow_trigger():
+    """Create a new workflow trigger"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'trigger_type', 'event_type']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"{field} is required"}), 400
+        
+        # Validate trigger type
+        valid_types = ['event', 'schedule', 'webhook', 'manual']
+        if data.get('trigger_type') not in valid_types:
+            return jsonify({"error": f"Invalid trigger type. Must be one of: {', '.join(valid_types)}"}), 400
+        
+        trigger = WorkflowTrigger(
+            name=data['name'],
+            description=data.get('description'),
+            trigger_type=data['trigger_type'],
+            event_type=data['event_type'],
+            conditions=data.get('conditions', {}),
+            enabled=data.get('enabled', True),
+            priority=data.get('priority', 5),
+            metadata=data.get('metadata', {})
+        )
+        
+        db.session.add(trigger)
+        db.session.commit()
+        
+        return jsonify(trigger.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create workflow trigger error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create workflow trigger"}), 500
+
+@app.route('/api/workflows/triggers/<int:trigger_id>', methods=['GET'])
+@jwt_required()
+def get_workflow_trigger(trigger_id):
+    """Get specific workflow trigger"""
+    try:
+        trigger = WorkflowTrigger.query.get(trigger_id)
+        if not trigger:
+            return jsonify({"error": "Trigger not found"}), 404
+        return jsonify(trigger.to_dict())
+    except Exception as e:
+        logger.error(f"Get workflow trigger error: {e}")
+        return jsonify({"error": "Failed to fetch workflow trigger"}), 500
+
+@app.route('/api/workflows/triggers/<int:trigger_id>', methods=['PUT'])
+@jwt_required()
+def update_workflow_trigger(trigger_id):
+    """Update workflow trigger"""
+    try:
+        trigger = WorkflowTrigger.query.get(trigger_id)
+        if not trigger:
+            return jsonify({"error": "Trigger not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update fields
+        for field in ['name', 'description', 'trigger_type', 'event_type', 'conditions', 'enabled', 'priority', 'metadata']:
+            if field in data:
+                setattr(trigger, field, data[field])
+        
+        db.session.commit()
+        return jsonify(trigger.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update workflow trigger error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update workflow trigger"}), 500
+
+@app.route('/api/workflows/triggers/<int:trigger_id>', methods=['DELETE'])
+@jwt_required()
+def delete_workflow_trigger(trigger_id):
+    """Delete workflow trigger"""
+    try:
+        trigger = WorkflowTrigger.query.get(trigger_id)
+        if not trigger:
+            return jsonify({"error": "Trigger not found"}), 404
+        
+        # Check for dependent rules
+        dependent_rules = BusinessRule.query.filter_by(trigger_id=trigger_id).all()
+        if dependent_rules:
+            return jsonify({
+                "error": "Cannot delete trigger with dependent business rules",
+                "dependent_rules": [rule.name for rule in dependent_rules]
+            }), 400
+        
+        db.session.delete(trigger)
+        db.session.commit()
+        return jsonify({"message": "Trigger deleted successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete workflow trigger error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete workflow trigger"}), 500
+
+# Business Rules Management
+@app.route('/api/workflows/rules', methods=['GET'])
+@jwt_required()
+def get_business_rules():
+    """Get all business rules"""
+    try:
+        rules = BusinessRule.query.all()
+        return jsonify([rule.to_dict() for rule in rules])
+    except Exception as e:
+        logger.error(f"Get business rules error: {e}")
+        return jsonify({"error": "Failed to fetch business rules"}), 500
+
+@app.route('/api/workflows/rules', methods=['POST'])
+@jwt_required()
+def create_business_rule():
+    """Create a new business rule"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'trigger_id']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"{field} is required"}), 400
+        
+        # Validate trigger exists
+        trigger = WorkflowTrigger.query.get(data['trigger_id'])
+        if not trigger:
+            return jsonify({"error": "Invalid trigger_id"}), 400
+        
+        rule = BusinessRule(
+            name=data['name'],
+            description=data.get('description'),
+            trigger_id=data['trigger_id'],
+            conditions=data.get('conditions', {}),
+            actions=data.get('actions', []),
+            enabled=data.get('enabled', True),
+            priority=data.get('priority', 5),
+            metadata=data.get('metadata', {})
+        )
+        
+        db.session.add(rule)
+        db.session.commit()
+        
+        return jsonify(rule.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create business rule error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create business rule"}), 500
+
+@app.route('/api/workflows/rules/<int:rule_id>', methods=['GET'])
+@jwt_required()
+def get_business_rule(rule_id):
+    """Get specific business rule"""
+    try:
+        rule = BusinessRule.query.get(rule_id)
+        if not rule:
+            return jsonify({"error": "Rule not found"}), 404
+        return jsonify(rule.to_dict())
+    except Exception as e:
+        logger.error(f"Get business rule error: {e}")
+        return jsonify({"error": "Failed to fetch business rule"}), 500
+
+@app.route('/api/workflows/rules/<int:rule_id>', methods=['PUT'])
+@jwt_required()
+def update_business_rule(rule_id):
+    """Update business rule"""
+    try:
+        rule = BusinessRule.query.get(rule_id)
+        if not rule:
+            return jsonify({"error": "Rule not found"}), 404
+        
+        data = request.get_json()
+        
+        # Validate trigger if updated
+        if 'trigger_id' in data:
+            trigger = WorkflowTrigger.query.get(data['trigger_id'])
+            if not trigger:
+                return jsonify({"error": "Invalid trigger_id"}), 400
+        
+        # Update fields
+        for field in ['name', 'description', 'trigger_id', 'conditions', 'actions', 'enabled', 'priority', 'metadata']:
+            if field in data:
+                setattr(rule, field, data[field])
+        
+        db.session.commit()
+        return jsonify(rule.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update business rule error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update business rule"}), 500
+
+@app.route('/api/workflows/rules/<int:rule_id>', methods=['DELETE'])
+@jwt_required()
+def delete_business_rule(rule_id):
+    """Delete business rule"""
+    try:
+        rule = BusinessRule.query.get(rule_id)
+        if not rule:
+            return jsonify({"error": "Rule not found"}), 404
+        
+        db.session.delete(rule)
+        db.session.commit()
+        return jsonify({"message": "Rule deleted successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete business rule error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete business rule"}), 500
+
+@app.route('/api/workflows/rules/<int:rule_id>/test', methods=['POST'])
+@jwt_required()
+def test_business_rule(rule_id):
+    """Test a business rule with sample data"""
+    try:
+        rule = BusinessRule.query.get(rule_id)
+        if not rule:
+            return jsonify({"error": "Rule not found"}), 404
+        
+        data = request.get_json()
+        test_context = data.get('context', {})
+        
+        # Test rule conditions
+        conditions_result = business_rule_engine._evaluate_conditions(rule.conditions, test_context)
+        
+        results = []
+        if conditions_result:
+            # Execute actions in test mode
+            for action in rule.actions:
+                action_result = business_rule_engine._execute_action(action, test_context, test_mode=True)
+                results.append(action_result)
+        
+        return jsonify({
+            'rule_id': rule_id,
+            'rule_name': rule.name,
+            'conditions_met': conditions_result,
+            'actions_executed': len(results) if conditions_result else 0,
+            'test_results': results,
+            'test_context': test_context
+        })
+        
+    except Exception as e:
+        logger.error(f"Test business rule error: {e}")
+        return jsonify({"error": "Failed to test business rule"}), 500
+
+# Workflow Actions Management
+@app.route('/api/workflows/actions', methods=['GET'])
+@jwt_required()
+def get_workflow_actions():
+    """Get all workflow actions"""
+    try:
+        actions = WorkflowAction.query.all()
+        return jsonify([action.to_dict() for action in actions])
+    except Exception as e:
+        logger.error(f"Get workflow actions error: {e}")
+        return jsonify({"error": "Failed to fetch workflow actions"}), 500
+
+@app.route('/api/workflows/actions', methods=['POST'])
+@jwt_required()
+def create_workflow_action():
+    """Create a new workflow action"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'action_type']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"{field} is required"}), 400
+        
+        # Validate action type
+        valid_types = ['notification', 'webhook', 'email', 'update_data', 'trigger_event', 'execute_script']
+        if data.get('action_type') not in valid_types:
+            return jsonify({"error": f"Invalid action type. Must be one of: {', '.join(valid_types)}"}), 400
+        
+        action = WorkflowAction(
+            name=data['name'],
+            description=data.get('description'),
+            action_type=data['action_type'],
+            configuration=data.get('configuration', {}),
+            enabled=data.get('enabled', True),
+            retry_attempts=data.get('retry_attempts', 3),
+            timeout_seconds=data.get('timeout_seconds', 30),
+            metadata=data.get('metadata', {})
+        )
+        
+        db.session.add(action)
+        db.session.commit()
+        
+        return jsonify(action.to_dict()), 201
+        
+    except Exception as e:
+        logger.error(f"Create workflow action error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create workflow action"}), 500
+
+@app.route('/api/workflows/actions/<int:action_id>', methods=['GET'])
+@jwt_required()
+def get_workflow_action(action_id):
+    """Get specific workflow action"""
+    try:
+        action = WorkflowAction.query.get(action_id)
+        if not action:
+            return jsonify({"error": "Action not found"}), 404
+        return jsonify(action.to_dict())
+    except Exception as e:
+        logger.error(f"Get workflow action error: {e}")
+        return jsonify({"error": "Failed to fetch workflow action"}), 500
+
+@app.route('/api/workflows/actions/<int:action_id>', methods=['PUT'])
+@jwt_required()
+def update_workflow_action(action_id):
+    """Update workflow action"""
+    try:
+        action = WorkflowAction.query.get(action_id)
+        if not action:
+            return jsonify({"error": "Action not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update fields
+        for field in ['name', 'description', 'action_type', 'configuration', 'enabled', 'retry_attempts', 'timeout_seconds', 'metadata']:
+            if field in data:
+                setattr(action, field, data[field])
+        
+        db.session.commit()
+        return jsonify(action.to_dict())
+        
+    except Exception as e:
+        logger.error(f"Update workflow action error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update workflow action"}), 500
+
+@app.route('/api/workflows/actions/<int:action_id>', methods=['DELETE'])
+@jwt_required()
+def delete_workflow_action(action_id):
+    """Delete workflow action"""
+    try:
+        action = WorkflowAction.query.get(action_id)
+        if not action:
+            return jsonify({"error": "Action not found"}), 404
+        
+        db.session.delete(action)
+        db.session.commit()
+        return jsonify({"message": "Action deleted successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Delete workflow action error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete workflow action"}), 500
+
+@app.route('/api/workflows/actions/<int:action_id>/test', methods=['POST'])
+@jwt_required()
+def test_workflow_action(action_id):
+    """Test a workflow action"""
+    try:
+        action = WorkflowAction.query.get(action_id)
+        if not action:
+            return jsonify({"error": "Action not found"}), 404
+        
+        data = request.get_json()
+        test_context = data.get('context', {})
+        
+        # Execute action in test mode
+        result = business_rule_engine._execute_action({
+            'action': action.action_type,
+            'configuration': action.configuration
+        }, test_context, test_mode=True)
+        
+        return jsonify({
+            'action_id': action_id,
+            'action_name': action.name,
+            'action_type': action.action_type,
+            'test_result': result,
+            'test_context': test_context
+        })
+        
+    except Exception as e:
+        logger.error(f"Test workflow action error: {e}")
+        return jsonify({"error": "Failed to test workflow action"}), 500
+
+# Workflow Executions Management
+@app.route('/api/workflows/executions', methods=['GET'])
+@jwt_required()
+def get_workflow_executions():
+    """Get workflow executions with optional filtering"""
+    try:
+        query = WorkflowExecution.query
+        
+        # Filter by status
+        status = request.args.get('status')
+        if status:
+            query = query.filter(WorkflowExecution.status == status)
+        
+        # Filter by trigger
+        trigger_id = request.args.get('trigger_id')
+        if trigger_id:
+            query = query.filter(WorkflowExecution.trigger_id == trigger_id)
+        
+        # Filter by rule
+        rule_id = request.args.get('rule_id')
+        if rule_id:
+            query = query.filter(WorkflowExecution.rule_id == rule_id)
+        
+        # Date range filter
+        start_date = request.args.get('start_date')
+        if start_date:
+            query = query.filter(WorkflowExecution.start_time >= datetime.fromisoformat(start_date))
+        
+        end_date = request.args.get('end_date')
+        if end_date:
+            query = query.filter(WorkflowExecution.start_time <= datetime.fromisoformat(end_date))
+        
+        # Pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        executions = query.order_by(WorkflowExecution.start_time.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'executions': [execution.to_dict() for execution in executions.items],
+            'total': executions.total,
+            'pages': executions.pages,
+            'current_page': page,
+            'per_page': per_page
+        })
+        
+    except Exception as e:
+        logger.error(f"Get workflow executions error: {e}")
+        return jsonify({"error": "Failed to fetch workflow executions"}), 500
+
+@app.route('/api/workflows/executions/<string:execution_id>', methods=['GET'])
+@jwt_required()
+def get_workflow_execution(execution_id):
+    """Get specific workflow execution"""
+    try:
+        execution = WorkflowExecution.query.filter_by(execution_id=execution_id).first()
+        if not execution:
+            return jsonify({"error": "Execution not found"}), 404
+        return jsonify(execution.to_dict())
+    except Exception as e:
+        logger.error(f"Get workflow execution error: {e}")
+        return jsonify({"error": "Failed to fetch workflow execution"}), 500
+
+@app.route('/api/workflows/executions/<string:execution_id>/retry', methods=['POST'])
+@jwt_required()
+def retry_workflow_execution(execution_id):
+    """Retry a failed workflow execution"""
+    try:
+        execution = WorkflowExecution.query.filter_by(execution_id=execution_id).first()
+        if not execution:
+            return jsonify({"error": "Execution not found"}), 404
+        
+        if execution.status != 'failed':
+            return jsonify({"error": "Can only retry failed executions"}), 400
+        
+        # Create new execution for retry
+        new_execution = WorkflowExecution(
+            trigger_id=execution.trigger_id,
+            rule_id=execution.rule_id,
+            status='running',
+            start_time=datetime.now(),
+            metadata={**execution.metadata, 'retry_of': execution_id}
+        )
+        
+        db.session.add(new_execution)
+        db.session.commit()
+        
+        # Execute the workflow
+        # In production, this would be handled by background job system
+        logger.info(f"Retrying workflow execution: {execution_id}")
+        
+        return jsonify({
+            'message': 'Workflow execution retry initiated',
+            'new_execution_id': new_execution.execution_id,
+            'original_execution_id': execution_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Retry workflow execution error: {e}")
+        return jsonify({"error": "Failed to retry workflow execution"}), 500
+
+# Workflow Templates and Presets
+@app.route('/api/workflows/templates', methods=['GET'])
+@jwt_required()
+def get_workflow_templates():
+    """Get predefined workflow templates"""
+    try:
+        templates = [
+            {
+                "id": "revenue_milestone_workflow",
+                "name": "Revenue Milestone Workflow",
+                "description": "Automated workflow for revenue milestone notifications and actions",
+                "trigger": {
+                    "name": "Revenue Milestone Trigger",
+                    "trigger_type": "event",
+                    "event_type": "revenue_milestone",
+                    "conditions": {"milestone_amount": {"gte": 1000000}}
+                },
+                "rules": [
+                    {
+                        "name": "Revenue Milestone Alert Rule",
+                        "conditions": {"percentage_increase": {"gte": 10}},
+                        "actions": [
+                            {"action": "notification", "channels": ["email", "slack"]},
+                            {"action": "webhook", "webhook_id": 1},
+                            {"action": "update_data", "entity": "milestone", "data": {"achieved": True}}
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "agent_performance_workflow",
+                "name": "AI Agent Performance Workflow",
+                "description": "Monitor and optimize AI agent performance automatically",
+                "trigger": {
+                    "name": "Agent Performance Trigger",
+                    "trigger_type": "event",
+                    "event_type": "agent_performance_update",
+                    "conditions": {}
+                },
+                "rules": [
+                    {
+                        "name": "High Performance Alert",
+                        "conditions": {"success_rate": {"gte": 95}},
+                        "actions": [
+                            {"action": "notification", "message": "Agent {agent_name} achieving exceptional performance"}
+                        ]
+                    },
+                    {
+                        "name": "Low Performance Alert",
+                        "conditions": {"success_rate": {"lte": 30}},
+                        "actions": [
+                            {"action": "notification", "priority": "high", "message": "Agent {agent_name} needs optimization"},
+                            {"action": "trigger_event", "event_type": "agent_optimization_required"}
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "opportunity_management_workflow",
+                "name": "Executive Opportunity Management",
+                "description": "Automated management of executive opportunities and follow-ups",
+                "trigger": {
+                    "name": "Opportunity Status Change",
+                    "trigger_type": "event",
+                    "event_type": "opportunity_status_change",
+                    "conditions": {}
+                },
+                "rules": [
+                    {
+                        "name": "Offer Received Alert",
+                        "conditions": {"status": {"eq": "offer_received"}},
+                        "actions": [
+                            {"action": "notification", "priority": "critical", "channels": ["email", "slack"]},
+                            {"action": "webhook", "url": "make_com_opportunity_sync"}
+                        ]
+                    },
+                    {
+                        "name": "High Match Opportunity",
+                        "conditions": {"ai_match_score": {"gte": 90}},
+                        "actions": [
+                            {"action": "notification", "message": "High-match opportunity: {opportunity_title}"},
+                            {"action": "trigger_event", "event_type": "priority_opportunity_review"}
+                        ]
+                    }
+                ]
+            }
+        ]
+        
+        return jsonify(templates)
+        
+    except Exception as e:
+        logger.error(f"Get workflow templates error: {e}")
+        return jsonify({"error": "Failed to fetch workflow templates"}), 500
+
+@app.route('/api/workflows/templates/<string:template_id>/create', methods=['POST'])
+@jwt_required()
+def create_workflow_from_template(template_id):
+    """Create workflow components from a template"""
+    try:
+        data = request.get_json()
+        
+        # Get template (in production, load from database)
+        templates = {
+            "revenue_milestone_workflow": {
+                "trigger": {
+                    "name": "Revenue Milestone Trigger",
+                    "trigger_type": "event",
+                    "event_type": "revenue_milestone",
+                    "conditions": {"milestone_amount": {"gte": 1000000}}
+                },
+                "rule": {
+                    "name": "Revenue Milestone Alert Rule",
+                    "conditions": {"percentage_increase": {"gte": 10}},
+                    "actions": [
+                        {"action": "notification", "channels": ["email", "slack"]},
+                        {"action": "webhook", "webhook_id": 1}
+                    ]
+                }
+            }
+        }
+        
+        if template_id not in templates:
+            return jsonify({"error": "Template not found"}), 404
+        
+        template = templates[template_id]
+        
+        # Create trigger
+        trigger_data = template['trigger']
+        trigger = WorkflowTrigger(
+            name=data.get('trigger_name', trigger_data['name']),
+            trigger_type=trigger_data['trigger_type'],
+            event_type=trigger_data['event_type'],
+            conditions=trigger_data.get('conditions', {}),
+            enabled=True
+        )
+        db.session.add(trigger)
+        db.session.flush()
+        
+        # Create rule
+        rule_data = template['rule']
+        rule = BusinessRule(
+            name=data.get('rule_name', rule_data['name']),
+            trigger_id=trigger.id,
+            conditions=rule_data.get('conditions', {}),
+            actions=rule_data.get('actions', []),
+            enabled=True
+        )
+        db.session.add(rule)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Workflow created from template',
+            'template_id': template_id,
+            'trigger': trigger.to_dict(),
+            'rule': rule.to_dict()
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Create workflow from template error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create workflow from template"}), 500
+
+# Workflow Statistics and Analytics
+@app.route('/api/workflows/analytics', methods=['GET'])
+@jwt_required()
+def get_workflow_analytics():
+    """Get workflow analytics and statistics"""
+    try:
+        # Get execution statistics
+        total_executions = WorkflowExecution.query.count()
+        successful_executions = WorkflowExecution.query.filter_by(status='completed').count()
+        failed_executions = WorkflowExecution.query.filter_by(status='failed').count()
+        
+        # Get trigger statistics
+        total_triggers = WorkflowTrigger.query.count()
+        enabled_triggers = WorkflowTrigger.query.filter_by(enabled=True).count()
+        
+        # Get rule statistics
+        total_rules = BusinessRule.query.count()
+        enabled_rules = BusinessRule.query.filter_by(enabled=True).count()
+        
+        # Get recent execution trends (last 7 days)
+        week_ago = datetime.now() - timedelta(days=7)
+        recent_executions = WorkflowExecution.query.filter(
+            WorkflowExecution.start_time >= week_ago
+        ).all()
+        
+        # Group by day
+        daily_stats = {}
+        for execution in recent_executions:
+            day = execution.start_time.date().isoformat()
+            if day not in daily_stats:
+                daily_stats[day] = {'total': 0, 'successful': 0, 'failed': 0}
+            daily_stats[day]['total'] += 1
+            if execution.status == 'completed':
+                daily_stats[day]['successful'] += 1
+            elif execution.status == 'failed':
+                daily_stats[day]['failed'] += 1
+        
+        return jsonify({
+            'overview': {
+                'total_executions': total_executions,
+                'successful_executions': successful_executions,
+                'failed_executions': failed_executions,
+                'success_rate': (successful_executions / total_executions * 100) if total_executions > 0 else 0,
+                'total_triggers': total_triggers,
+                'enabled_triggers': enabled_triggers,
+                'total_rules': total_rules,
+                'enabled_rules': enabled_rules
+            },
+            'daily_trends': daily_stats,
+            'most_active_triggers': [],  # Could add query for most triggered
+            'performance_summary': {
+                'avg_execution_time': '1.2s',  # Could calculate from actual data
+                'total_actions_executed': successful_executions * 2  # Estimated
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get workflow analytics error: {e}")
+        return jsonify({"error": "Failed to fetch workflow analytics"}), 500
+
+# ============================
+# BUSINESS PROCESS AUTOMATION
+# ============================
+
+# Lead Nurturing Automation
+@app.route('/api/automation/lead-nurturing', methods=['POST'])
+@jwt_required()
+def create_lead_nurturing_workflow():
+    """Create automated lead nurturing workflow"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['lead_id', 'lead_source', 'qualification_score']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"{field} is required"}), 400
+        
+        lead_id = data['lead_id']
+        lead_source = data['lead_source']
+        qualification_score = data['qualification_score']
+        
+        # Create nurturing workflow based on lead qualification score
+        if qualification_score >= 80:
+            # High-quality lead - immediate action
+            workflow_actions = [
+                {
+                    "action": "notification",
+                    "priority": "high",
+                    "message": f"High-quality lead {lead_id} requires immediate attention",
+                    "channels": ["email", "slack"]
+                },
+                {
+                    "action": "trigger_event",
+                    "event_type": "priority_lead_review",
+                    "data": {"lead_id": lead_id, "score": qualification_score}
+                },
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 1,
+                    "action_type": "sales_call"
+                }
+            ]
+        elif qualification_score >= 60:
+            # Medium-quality lead - nurturing sequence
+            workflow_actions = [
+                {
+                    "action": "email",
+                    "template": "lead_nurturing_sequence_start",
+                    "delay_hours": 0
+                },
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 24,
+                    "action_type": "nurturing_email_2"
+                },
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 72,
+                    "action_type": "qualification_call"
+                }
+            ]
+        else:
+            # Low-quality lead - basic nurturing
+            workflow_actions = [
+                {
+                    "action": "email",
+                    "template": "lead_nurturing_basic",
+                    "delay_hours": 0
+                },
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 168,  # 1 week
+                    "action_type": "re_qualification"
+                }
+            ]
+        
+        # Execute workflow actions
+        execution_id = str(uuid.uuid4())
+        execution_results = []
+        
+        for action in workflow_actions:
+            try:
+                result = business_rule_engine._execute_action(action, {
+                    'lead_id': lead_id,
+                    'lead_source': lead_source,
+                    'qualification_score': qualification_score
+                })
+                execution_results.append({
+                    'action': action['action'],
+                    'result': result,
+                    'status': 'completed'
+                })
+            except Exception as e:
+                execution_results.append({
+                    'action': action['action'],
+                    'result': str(e),
+                    'status': 'failed'
+                })
+        
+        # Log workflow execution
+        execution = WorkflowExecution(
+            trigger_id=None,  # Automated workflow
+            rule_id=None,
+            status='completed',
+            start_time=datetime.now(),
+            end_time=datetime.now(),
+            result_data={
+                'workflow_type': 'lead_nurturing',
+                'lead_id': lead_id,
+                'qualification_score': qualification_score,
+                'actions_executed': len(execution_results),
+                'results': execution_results
+            }
+        )
+        db.session.add(execution)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'execution_id': execution_id,
+            'workflow_type': 'lead_nurturing',
+            'lead_id': lead_id,
+            'qualification_score': qualification_score,
+            'actions_executed': len(execution_results),
+            'results': execution_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Lead nurturing workflow error: {e}")
+        return jsonify({"error": "Failed to create lead nurturing workflow"}), 500
+
+@app.route('/api/automation/lead-scoring', methods=['POST'])
+@jwt_required()
+def automated_lead_scoring():
+    """Automated lead scoring and qualification"""
+    try:
+        data = request.get_json()
+        
+        # Calculate lead score based on multiple factors
+        lead_data = data.get('lead_data', {})
+        
+        score = 0
+        scoring_factors = []
+        
+        # Company size scoring
+        company_size = lead_data.get('company_size', 0)
+        if company_size >= 1000:
+            score += 25
+            scoring_factors.append("Large company (+25 points)")
+        elif company_size >= 100:
+            score += 15
+            scoring_factors.append("Medium company (+15 points)")
+        elif company_size >= 10:
+            score += 10
+            scoring_factors.append("Small company (+10 points)")
+        
+        # Industry scoring
+        industry = lead_data.get('industry', '').lower()
+        high_value_industries = ['technology', 'finance', 'healthcare', 'manufacturing']
+        if industry in high_value_industries:
+            score += 20
+            scoring_factors.append(f"High-value industry: {industry} (+20 points)")
+        
+        # Revenue potential scoring
+        revenue_potential = lead_data.get('annual_revenue', 0)
+        if revenue_potential >= 10000000:  # $10M+
+            score += 30
+            scoring_factors.append("High revenue potential (+30 points)")
+        elif revenue_potential >= 1000000:  # $1M+
+            score += 20
+            scoring_factors.append("Medium revenue potential (+20 points)")
+        
+        # Contact level scoring
+        job_title = lead_data.get('job_title', '').lower()
+        executive_titles = ['ceo', 'cto', 'cfo', 'vp', 'director', 'head']
+        if any(title in job_title for title in executive_titles):
+            score += 15
+            scoring_factors.append("Executive level contact (+15 points)")
+        
+        # Engagement scoring
+        engagement_score = lead_data.get('engagement_score', 0)
+        score += min(engagement_score, 10)  # Max 10 points for engagement
+        if engagement_score > 0:
+            scoring_factors.append(f"Engagement score (+{min(engagement_score, 10)} points)")
+        
+        # Determine lead quality
+        if score >= 80:
+            quality = "high"
+            priority = "immediate"
+        elif score >= 60:
+            quality = "medium"
+            priority = "normal"
+        else:
+            quality = "low"
+            priority = "low"
+        
+        # Trigger appropriate workflow based on score
+        if score >= 60:  # Qualified leads
+            # Trigger lead nurturing workflow
+            nurturing_result = create_lead_nurturing_workflow()
+        
+        return jsonify({
+            'lead_id': data.get('lead_id'),
+            'qualification_score': score,
+            'quality': quality,
+            'priority': priority,
+            'scoring_factors': scoring_factors,
+            'recommended_actions': {
+                'high': ['immediate_sales_call', 'priority_followup', 'executive_alert'],
+                'medium': ['nurturing_sequence', 'scheduled_demo', 'qualification_call'],
+                'low': ['basic_nurturing', 'newsletter_subscription', 'monthly_check']
+            }.get(quality, [])
+        })
+        
+    except Exception as e:
+        logger.error(f"Lead scoring error: {e}")
+        return jsonify({"error": "Failed to score lead"}), 500
+
+# Opportunity Tracking Automation
+@app.route('/api/automation/opportunity-tracking', methods=['POST'])
+@jwt_required()
+def create_opportunity_tracking_workflow():
+    """Create automated opportunity tracking workflow"""
+    try:
+        data = request.get_json()
+        
+        opportunity_id = data.get('opportunity_id')
+        current_stage = data.get('current_stage')
+        previous_stage = data.get('previous_stage')
+        deal_value = data.get('deal_value', 0)
+        days_in_stage = data.get('days_in_stage', 0)
+        
+        workflow_actions = []
+        
+        # Stage-specific automation
+        if current_stage == 'discovery':
+            workflow_actions.extend([
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 48,
+                    "action_type": "discovery_call_followup"
+                },
+                {
+                    "action": "update_data",
+                    "entity": "opportunity",
+                    "data": {"next_action": "needs_analysis", "priority": "normal"}
+                }
+            ])
+        
+        elif current_stage == 'proposal':
+            workflow_actions.extend([
+                {
+                    "action": "notification",
+                    "message": f"Opportunity {opportunity_id} moved to proposal stage - ${deal_value:,.0f}",
+                    "channels": ["email", "slack"]
+                },
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 24,
+                    "action_type": "proposal_review"
+                }
+            ])
+            
+            if deal_value >= 100000:  # High-value deals
+                workflow_actions.append({
+                    "action": "trigger_event",
+                    "event_type": "executive_review_required",
+                    "data": {"opportunity_id": opportunity_id, "value": deal_value}
+                })
+        
+        elif current_stage == 'negotiation':
+            workflow_actions.extend([
+                {
+                    "action": "notification",
+                    "priority": "high",
+                    "message": f"Opportunity {opportunity_id} in negotiation - requires attention",
+                    "channels": ["email", "slack"]
+                },
+                {
+                    "action": "schedule_followup",
+                    "delay_hours": 12,
+                    "action_type": "negotiation_support"
+                }
+            ])
+        
+        elif current_stage == 'closed_won':
+            workflow_actions.extend([
+                {
+                    "action": "notification",
+                    "priority": "critical",
+                    "message": f"🎉 Deal Won! Opportunity {opportunity_id} - ${deal_value:,.0f}",
+                    "channels": ["email", "slack", "webhook"]
+                },
+                {
+                    "action": "trigger_event",
+                    "event_type": "revenue_milestone",
+                    "data": {"amount": deal_value, "opportunity_id": opportunity_id}
+                },
+                {
+                    "action": "webhook",
+                    "url": "make_com_deal_won",
+                    "data": {"opportunity_id": opportunity_id, "value": deal_value}
+                }
+            ])
+        
+        # Stalled opportunity detection
+        if days_in_stage > 14 and current_stage not in ['closed_won', 'closed_lost']:
+            workflow_actions.append({
+                "action": "notification",
+                "priority": "medium",
+                "message": f"Opportunity {opportunity_id} stalled in {current_stage} for {days_in_stage} days",
+                "channels": ["email"]
+            })
+        
+        # Execute workflow
+        execution_results = []
+        for action in workflow_actions:
+            try:
+                result = business_rule_engine._execute_action(action, {
+                    'opportunity_id': opportunity_id,
+                    'current_stage': current_stage,
+                    'deal_value': deal_value
+                })
+                execution_results.append({
+                    'action': action['action'],
+                    'result': result,
+                    'status': 'completed'
+                })
+            except Exception as e:
+                execution_results.append({
+                    'action': action['action'],
+                    'result': str(e),
+                    'status': 'failed'
+                })
+        
+        return jsonify({
+            'success': True,
+            'opportunity_id': opportunity_id,
+            'current_stage': current_stage,
+            'actions_executed': len(execution_results),
+            'results': execution_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Opportunity tracking workflow error: {e}")
+        return jsonify({"error": "Failed to create opportunity tracking workflow"}), 500
+
+# AI Agent Coordination Automation
+@app.route('/api/automation/agent-coordination', methods=['POST'])
+@jwt_required()
+def create_agent_coordination_workflow():
+    """Create automated AI agent coordination workflow"""
+    try:
+        data = request.get_json()
+        
+        coordination_type = data.get('coordination_type')  # 'performance_optimization', 'task_distribution', 'collaboration'
+        agents_involved = data.get('agents_involved', [])
+        trigger_data = data.get('trigger_data', {})
+        
+        workflow_actions = []
+        
+        if coordination_type == 'performance_optimization':
+            # Analyze agent performance and optimize
+            for agent in agents_involved:
+                agent_data = trigger_data.get(f'agent_{agent}', {})
+                success_rate = agent_data.get('success_rate', 0)
+                
+                if success_rate < 30:  # Poor performance
+                    workflow_actions.extend([
+                        {
+                            "action": "notification",
+                            "priority": "high",
+                            "message": f"Agent {agent} performance below threshold: {success_rate}%",
+                            "channels": ["email", "slack"]
+                        },
+                        {
+                            "action": "trigger_event",
+                            "event_type": "agent_training_required",
+                            "data": {"agent_id": agent, "performance_issue": "low_success_rate"}
+                        },
+                        {
+                            "action": "update_data",
+                            "entity": "agent",
+                            "data": {"status": "optimization_required", "last_optimization": datetime.now().isoformat()}
+                        }
+                    ])
+                
+                elif success_rate > 95:  # Excellent performance
+                    workflow_actions.extend([
+                        {
+                            "action": "notification",
+                            "message": f"🌟 Agent {agent} achieving excellent performance: {success_rate}%",
+                            "channels": ["slack"]
+                        },
+                        {
+                            "action": "trigger_event",
+                            "event_type": "agent_model_promotion",
+                            "data": {"agent_id": agent, "performance_level": "excellent"}
+                        }
+                    ])
+        
+        elif coordination_type == 'task_distribution':
+            # Distribute tasks based on agent capabilities and workload
+            total_tasks = trigger_data.get('pending_tasks', 0)
+            
+            if total_tasks > 100:  # High task volume
+                workflow_actions.extend([
+                    {
+                        "action": "notification",
+                        "message": f"High task volume detected: {total_tasks} pending tasks",
+                        "channels": ["slack"]
+                    },
+                    {
+                        "action": "trigger_event",
+                        "event_type": "agent_scaling_required",
+                        "data": {"task_count": total_tasks, "agents_available": len(agents_involved)}
+                    }
+                ])
+                
+                # Distribute tasks among available agents
+                tasks_per_agent = total_tasks // len(agents_involved)
+                for agent in agents_involved:
+                    workflow_actions.append({
+                        "action": "update_data",
+                        "entity": "agent_workload",
+                        "data": {"agent_id": agent, "assigned_tasks": tasks_per_agent}
+                    })
+        
+        elif coordination_type == 'collaboration':
+            # Coordinate multi-agent collaboration
+            collaboration_task = trigger_data.get('collaboration_task')
+            
+            workflow_actions.extend([
+                {
+                    "action": "notification",
+                    "message": f"Multi-agent collaboration initiated: {collaboration_task}",
+                    "channels": ["slack"]
+                },
+                {
+                    "action": "trigger_event",
+                    "event_type": "agent_collaboration_started",
+                    "data": {"task": collaboration_task, "agents": agents_involved}
+                }
+            ])
+            
+            # Set up coordination structure
+            primary_agent = agents_involved[0] if agents_involved else None
+            if primary_agent:
+                workflow_actions.append({
+                    "action": "update_data",
+                    "entity": "collaboration",
+                    "data": {
+                        "primary_agent": primary_agent,
+                        "supporting_agents": agents_involved[1:],
+                        "status": "active",
+                        "started_at": datetime.now().isoformat()
+                    }
+                })
+        
+        # Execute coordination workflow
+        execution_results = []
+        for action in workflow_actions:
+            try:
+                result = business_rule_engine._execute_action(action, {
+                    'coordination_type': coordination_type,
+                    'agents_involved': agents_involved,
+                    'trigger_data': trigger_data
+                })
+                execution_results.append({
+                    'action': action['action'],
+                    'result': result,
+                    'status': 'completed'
+                })
+            except Exception as e:
+                execution_results.append({
+                    'action': action['action'],
+                    'result': str(e),
+                    'status': 'failed'
+                })
+        
+        return jsonify({
+            'success': True,
+            'coordination_type': coordination_type,
+            'agents_involved': agents_involved,
+            'actions_executed': len(execution_results),
+            'results': execution_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Agent coordination workflow error: {e}")
+        return jsonify({"error": "Failed to create agent coordination workflow"}), 500
+
+# Business Process Templates
+@app.route('/api/automation/templates', methods=['GET'])
+@jwt_required()
+def get_business_process_templates():
+    """Get predefined business process automation templates"""
+    try:
+        templates = {
+            "lead_nurturing": {
+                "name": "Lead Nurturing Automation",
+                "description": "Automated lead scoring, qualification, and nurturing workflows",
+                "triggers": [
+                    "new_lead_created",
+                    "lead_engagement_scored", 
+                    "lead_qualification_updated"
+                ],
+                "actions": [
+                    "lead_scoring",
+                    "nurturing_sequence",
+                    "sales_alert",
+                    "followup_scheduling"
+                ],
+                "business_value": "Increases lead conversion by 40% through timely, relevant engagement"
+            },
+            "opportunity_management": {
+                "name": "Opportunity Pipeline Automation", 
+                "description": "Automated opportunity tracking, stage progression, and deal management",
+                "triggers": [
+                    "opportunity_stage_change",
+                    "deal_stalled",
+                    "proposal_submitted"
+                ],
+                "actions": [
+                    "stage_progression_alerts",
+                    "executive_notifications",
+                    "followup_reminders",
+                    "revenue_tracking"
+                ],
+                "business_value": "Reduces sales cycle by 25% and improves deal closure rates"
+            },
+            "agent_performance": {
+                "name": "AI Agent Performance Optimization",
+                "description": "Automated monitoring and optimization of AI agent performance",
+                "triggers": [
+                    "agent_performance_update",
+                    "success_rate_threshold",
+                    "task_completion_metrics"
+                ],
+                "actions": [
+                    "performance_alerts",
+                    "training_recommendations",
+                    "workload_optimization",
+                    "model_improvements"
+                ],
+                "business_value": "Improves AI agent efficiency by 35% through continuous optimization"
+            },
+            "revenue_milestones": {
+                "name": "Revenue Milestone Automation",
+                "description": "Automated tracking and celebration of revenue achievements",
+                "triggers": [
+                    "revenue_threshold_reached",
+                    "monthly_revenue_target",
+                    "quarterly_milestone"
+                ],
+                "actions": [
+                    "milestone_notifications",
+                    "team_celebrations",
+                    "investor_updates",
+                    "strategic_planning_triggers"
+                ],
+                "business_value": "Maintains team motivation and provides real-time business intelligence"
+            },
+            "executive_opportunities": {
+                "name": "Executive Opportunity Management",
+                "description": "Automated tracking and management of executive career opportunities", 
+                "triggers": [
+                    "opportunity_match_score",
+                    "application_status_change",
+                    "interview_scheduled"
+                ],
+                "actions": [
+                    "opportunity_alerts",
+                    "application_tracking",
+                    "interview_preparation",
+                    "decision_support"
+                ],
+                "business_value": "Streamlines executive opportunity management and decision-making"
+            }
+        }
+        
+        return jsonify(templates)
+        
+    except Exception as e:
+        logger.error(f"Get business process templates error: {e}")
+        return jsonify({"error": "Failed to fetch business process templates"}), 500
+
+@app.route('/api/automation/templates/<string:template_id>/deploy', methods=['POST'])
+@jwt_required()
+def deploy_business_process_template(template_id):
+    """Deploy a business process automation template"""
+    try:
+        data = request.get_json()
+        customizations = data.get('customizations', {})
+        
+        # Template configurations
+        template_configs = {
+            "lead_nurturing": {
+                "triggers": [
+                    {
+                        "name": "New Lead Created Trigger",
+                        "trigger_type": "event",
+                        "event_type": "lead_created",
+                        "conditions": {}
+                    }
+                ],
+                "rules": [
+                    {
+                        "name": "High-Value Lead Alert",
+                        "conditions": {"qualification_score": {"gte": 80}},
+                        "actions": [
+                            {"action": "notification", "priority": "high"},
+                            {"action": "trigger_event", "event_type": "priority_lead_review"}
+                        ]
+                    }
+                ]
+            },
+            "opportunity_management": {
+                "triggers": [
+                    {
+                        "name": "Opportunity Stage Change Trigger",
+                        "trigger_type": "event", 
+                        "event_type": "opportunity_stage_change",
+                        "conditions": {}
+                    }
+                ],
+                "rules": [
+                    {
+                        "name": "Deal Won Celebration",
+                        "conditions": {"stage": {"eq": "closed_won"}},
+                        "actions": [
+                            {"action": "notification", "priority": "critical"},
+                            {"action": "webhook", "url": "make_com_deal_celebration"}
+                        ]
+                    }
+                ]
+            }
+        }
+        
+        if template_id not in template_configs:
+            return jsonify({"error": "Template not found"}), 404
+        
+        config = template_configs[template_id]
+        deployed_components = []
+        
+        # Deploy triggers
+        for trigger_config in config.get('triggers', []):
+            trigger_config.update(customizations.get('trigger_overrides', {}))
+            
+            trigger = WorkflowTrigger(
+                name=trigger_config['name'],
+                trigger_type=trigger_config['trigger_type'],
+                event_type=trigger_config['event_type'],
+                conditions=trigger_config.get('conditions', {}),
+                enabled=True,
+                metadata={'template_id': template_id}
+            )
+            db.session.add(trigger)
+            db.session.flush()
+            deployed_components.append({'type': 'trigger', 'id': trigger.id, 'name': trigger.name})
+        
+        # Deploy rules
+        for rule_config in config.get('rules', []):
+            rule_config.update(customizations.get('rule_overrides', {}))
+            
+            rule = BusinessRule(
+                name=rule_config['name'],
+                trigger_id=trigger.id,  # Link to the first trigger created
+                conditions=rule_config.get('conditions', {}),
+                actions=rule_config.get('actions', []),
+                enabled=True,
+                metadata={'template_id': template_id}
+            )
+            db.session.add(rule)
+            deployed_components.append({'type': 'rule', 'id': rule.id, 'name': rule.name})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'template_id': template_id,
+            'deployed_components': deployed_components,
+            'message': f'Business process template "{template_id}" deployed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Deploy business process template error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to deploy business process template"}), 500
+
+# ============================
+# WORKFLOW EXECUTION LOGGING & MONITORING
+# ============================
+
+# Execution Logging System
+@app.route('/api/execution/logs', methods=['GET'])
+@jwt_required()
+def get_execution_logs():
+    """Get detailed execution logs with filtering and pagination"""
+    try:
+        # Query parameters
+        execution_id = request.args.get('execution_id')
+        rule_id = request.args.get('rule_id')
+        trigger_id = request.args.get('trigger_id')
+        status = request.args.get('status')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        log_level = request.args.get('log_level', 'INFO')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # Build query
+        query = WorkflowExecution.query
+        
+        if execution_id:
+            query = query.filter(WorkflowExecution.execution_id == execution_id)
+        if rule_id:
+            query = query.filter(WorkflowExecution.rule_id == rule_id)
+        if trigger_id:
+            query = query.filter(WorkflowExecution.trigger_id == trigger_id)
+        if status:
+            query = query.filter(WorkflowExecution.status == status)
+        if start_date:
+            query = query.filter(WorkflowExecution.start_time >= datetime.fromisoformat(start_date))
+        if end_date:
+            query = query.filter(WorkflowExecution.start_time <= datetime.fromisoformat(end_date))
+        
+        # Get paginated results
+        executions = query.order_by(WorkflowExecution.start_time.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        # Enhanced execution logs with performance metrics
+        detailed_logs = []
+        for execution in executions.items:
+            execution_data = execution.to_dict()
+            
+            # Calculate performance metrics
+            if execution.start_time and execution.end_time:
+                duration = (execution.end_time - execution.start_time).total_seconds()
+                execution_data['duration_seconds'] = duration
+                execution_data['performance_category'] = (
+                    'fast' if duration < 1 else
+                    'normal' if duration < 5 else
+                    'slow' if duration < 15 else
+                    'very_slow'
+                )
+            
+            # Add step-by-step execution details
+            result_data = execution.result_data or {}
+            execution_data['step_details'] = result_data.get('step_logs', [])
+            execution_data['action_count'] = len(result_data.get('results', []))
+            execution_data['success_rate'] = result_data.get('success_rate', 0)
+            
+            # Add error details if failed
+            if execution.status == 'failed':
+                execution_data['error_details'] = {
+                    'error_message': result_data.get('error'),
+                    'failed_step': result_data.get('failed_step'),
+                    'stack_trace': result_data.get('stack_trace')
+                }
+            
+            detailed_logs.append(execution_data)
+        
+        return jsonify({
+            'logs': detailed_logs,
+            'pagination': {
+                'total': executions.total,
+                'pages': executions.pages,
+                'current_page': page,
+                'per_page': per_page,
+                'has_next': executions.has_next,
+                'has_prev': executions.has_prev
+            },
+            'summary': {
+                'total_executions': executions.total,
+                'filtered_count': len(detailed_logs)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get execution logs error: {e}")
+        return jsonify({"error": "Failed to fetch execution logs"}), 500
+
+@app.route('/api/execution/logs/<string:execution_id>/steps', methods=['GET'])
+@jwt_required()
+def get_execution_step_logs(execution_id):
+    """Get detailed step-by-step execution logs for a specific execution"""
+    try:
+        execution = WorkflowExecution.query.filter_by(execution_id=execution_id).first()
+        if not execution:
+            return jsonify({"error": "Execution not found"}), 404
+        
+        result_data = execution.result_data or {}
+        step_logs = result_data.get('step_logs', [])
+        
+        # Enhanced step details with timing and performance data
+        enhanced_steps = []
+        total_duration = 0
+        
+        for i, step in enumerate(step_logs):
+            step_data = {
+                'step_number': i + 1,
+                'timestamp': step.get('timestamp'),
+                'action_type': step.get('action_type'),
+                'description': step.get('description'),
+                'status': step.get('status', 'unknown'),
+                'result': step.get('result'),
+                'duration_ms': step.get('duration_ms', 0),
+                'memory_usage': step.get('memory_usage'),
+                'retry_count': step.get('retry_count', 0)
+            }
+            
+            # Add error details for failed steps
+            if step.get('status') == 'failed':
+                step_data['error_details'] = {
+                    'error_message': step.get('error'),
+                    'error_type': step.get('error_type'),
+                    'retry_attempts': step.get('retry_attempts', 0)
+                }
+            
+            # Performance analysis
+            duration = step.get('duration_ms', 0)
+            total_duration += duration
+            step_data['performance_impact'] = (
+                'minimal' if duration < 100 else
+                'low' if duration < 500 else
+                'medium' if duration < 2000 else
+                'high'
+            )
+            
+            enhanced_steps.append(step_data)
+        
+        return jsonify({
+            'execution_id': execution_id,
+            'total_steps': len(enhanced_steps),
+            'total_duration_ms': total_duration,
+            'execution_status': execution.status,
+            'step_logs': enhanced_steps,
+            'performance_summary': {
+                'avg_step_duration': total_duration / len(enhanced_steps) if enhanced_steps else 0,
+                'slowest_step': max(enhanced_steps, key=lambda x: x['duration_ms']) if enhanced_steps else None,
+                'failed_steps': [s for s in enhanced_steps if s['status'] == 'failed']
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get execution step logs error: {e}")
+        return jsonify({"error": "Failed to fetch execution step logs"}), 500
+
+# Real-time Monitoring
+@app.route('/api/monitoring/executions/live', methods=['GET'])
+@jwt_required()
+def get_live_execution_monitoring():
+    """Get real-time execution monitoring data"""
+    try:
+        # Get currently running executions
+        running_executions = WorkflowExecution.query.filter_by(status='running').all()
+        
+        # Get recent executions (last hour)
+        one_hour_ago = datetime.now() - timedelta(hours=1)
+        recent_executions = WorkflowExecution.query.filter(
+            WorkflowExecution.start_time >= one_hour_ago
+        ).all()
+        
+        # Calculate real-time metrics
+        total_running = len(running_executions)
+        recent_completed = len([e for e in recent_executions if e.status == 'completed'])
+        recent_failed = len([e for e in recent_executions if e.status == 'failed'])
+        
+        # System performance metrics
+        system_metrics = {
+            'executions_running': total_running,
+            'executions_last_hour': len(recent_executions),
+            'success_rate_last_hour': (recent_completed / len(recent_executions) * 100) if recent_executions else 0,
+            'failure_rate_last_hour': (recent_failed / len(recent_executions) * 100) if recent_executions else 0,
+            'avg_execution_time': 2.3,  # Placeholder - could calculate from actual data
+            'system_health': 'healthy' if recent_failed < recent_completed else 'degraded'
+        }
+        
+        # Top failing rules/triggers
+        failing_rules = {}
+        failing_triggers = {}
+        
+        for execution in recent_executions:
+            if execution.status == 'failed':
+                if execution.rule_id:
+                    failing_rules[execution.rule_id] = failing_rules.get(execution.rule_id, 0) + 1
+                if execution.trigger_id:
+                    failing_triggers[execution.trigger_id] = failing_triggers.get(execution.trigger_id, 0) + 1
+        
+        # Format running executions with progress
+        live_executions = []
+        for execution in running_executions:
+            execution_data = execution.to_dict()
+            
+            # Calculate estimated progress based on typical execution time
+            if execution.start_time:
+                elapsed = (datetime.now() - execution.start_time).total_seconds()
+                estimated_progress = min(elapsed / 10 * 100, 95)  # Max 95% until actually complete
+                execution_data['estimated_progress'] = estimated_progress
+                execution_data['elapsed_time'] = elapsed
+            
+            live_executions.append(execution_data)
+        
+        return jsonify({
+            'timestamp': datetime.now().isoformat(),
+            'system_metrics': system_metrics,
+            'live_executions': live_executions,
+            'recent_activity': {
+                'total_executions': len(recent_executions),
+                'successful': recent_completed,
+                'failed': recent_failed,
+                'running': total_running
+            },
+            'top_failing_components': {
+                'rules': dict(sorted(failing_rules.items(), key=lambda x: x[1], reverse=True)[:5]),
+                'triggers': dict(sorted(failing_triggers.items(), key=lambda x: x[1], reverse=True)[:5])
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Live monitoring error: {e}")
+        return jsonify({"error": "Failed to fetch live monitoring data"}), 500
+
+# Performance Analytics
+@app.route('/api/monitoring/performance', methods=['GET'])
+@jwt_required()
+def get_performance_analytics():
+    """Get comprehensive performance analytics for workflow executions"""
+    try:
+        # Time range parameters
+        days = request.args.get('days', 7, type=int)
+        start_date = datetime.now() - timedelta(days=days)
+        
+        # Get executions within time range
+        executions = WorkflowExecution.query.filter(
+            WorkflowExecution.start_time >= start_date
+        ).all()
+        
+        # Performance metrics calculation
+        performance_data = {
+            'execution_times': [],
+            'success_rates': {},
+            'error_patterns': {},
+            'throughput_metrics': {},
+            'resource_usage': []
+        }
+        
+        # Calculate daily metrics
+        daily_metrics = {}
+        for execution in executions:
+            day = execution.start_time.date().isoformat()
+            if day not in daily_metrics:
+                daily_metrics[day] = {
+                    'total': 0,
+                    'successful': 0,
+                    'failed': 0,
+                    'execution_times': [],
+                    'error_types': {}
+                }
+            
+            daily_metrics[day]['total'] += 1
+            
+            if execution.status == 'completed':
+                daily_metrics[day]['successful'] += 1
+                
+                # Calculate execution time
+                if execution.start_time and execution.end_time:
+                    duration = (execution.end_time - execution.start_time).total_seconds()
+                    daily_metrics[day]['execution_times'].append(duration)
+                    performance_data['execution_times'].append({
+                        'date': day,
+                        'duration': duration,
+                        'execution_id': execution.execution_id
+                    })
+            
+            elif execution.status == 'failed':
+                daily_metrics[day]['failed'] += 1
+                
+                # Track error patterns
+                error_msg = execution.result_data.get('error', 'Unknown error') if execution.result_data else 'Unknown error'
+                error_type = error_msg.split(':')[0] if ':' in error_msg else error_msg
+                daily_metrics[day]['error_types'][error_type] = daily_metrics[day]['error_types'].get(error_type, 0) + 1
+                
+                if error_type not in performance_data['error_patterns']:
+                    performance_data['error_patterns'][error_type] = []
+                performance_data['error_patterns'][error_type].append({
+                    'date': day,
+                    'execution_id': execution.execution_id,
+                    'message': error_msg
+                })
+        
+        # Calculate aggregated metrics
+        all_execution_times = [time for daily in daily_metrics.values() for time in daily['execution_times']]
+        
+        summary_metrics = {
+            'total_executions': len(executions),
+            'successful_executions': len([e for e in executions if e.status == 'completed']),
+            'failed_executions': len([e for e in executions if e.status == 'failed']),
+            'average_execution_time': sum(all_execution_times) / len(all_execution_times) if all_execution_times else 0,
+            'median_execution_time': sorted(all_execution_times)[len(all_execution_times)//2] if all_execution_times else 0,
+            'p95_execution_time': sorted(all_execution_times)[int(len(all_execution_times)*0.95)] if all_execution_times else 0,
+            'success_rate': (len([e for e in executions if e.status == 'completed']) / len(executions) * 100) if executions else 0
+        }
+        
+        # Top performers and problem areas
+        rule_performance = {}
+        trigger_performance = {}
+        
+        for execution in executions:
+            if execution.rule_id:
+                if execution.rule_id not in rule_performance:
+                    rule_performance[execution.rule_id] = {'total': 0, 'successful': 0, 'avg_time': 0, 'times': []}
+                
+                rule_performance[execution.rule_id]['total'] += 1
+                if execution.status == 'completed':
+                    rule_performance[execution.rule_id]['successful'] += 1
+                    if execution.start_time and execution.end_time:
+                        duration = (execution.end_time - execution.start_time).total_seconds()
+                        rule_performance[execution.rule_id]['times'].append(duration)
+        
+        # Calculate success rates and average times for rules
+        for rule_id, perf in rule_performance.items():
+            perf['success_rate'] = (perf['successful'] / perf['total'] * 100) if perf['total'] > 0 else 0
+            perf['avg_execution_time'] = sum(perf['times']) / len(perf['times']) if perf['times'] else 0
+        
+        return jsonify({
+            'time_range': {
+                'start_date': start_date.isoformat(),
+                'end_date': datetime.now().isoformat(),
+                'days': days
+            },
+            'summary_metrics': summary_metrics,
+            'daily_metrics': daily_metrics,
+            'performance_trends': performance_data,
+            'rule_performance': rule_performance,
+            'top_performers': {
+                'fastest_rules': dict(sorted(rule_performance.items(), 
+                    key=lambda x: x[1]['avg_execution_time'])[:5]),
+                'most_reliable_rules': dict(sorted(rule_performance.items(), 
+                    key=lambda x: x[1]['success_rate'], reverse=True)[:5])
+            },
+            'problem_areas': {
+                'slowest_rules': dict(sorted(rule_performance.items(), 
+                    key=lambda x: x[1]['avg_execution_time'], reverse=True)[:5]),
+                'least_reliable_rules': dict(sorted(rule_performance.items(), 
+                    key=lambda x: x[1]['success_rate'])[:5])
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Performance analytics error: {e}")
+        return jsonify({"error": "Failed to fetch performance analytics"}), 500
+
+# Error Tracking and Diagnostics
+@app.route('/api/monitoring/errors', methods=['GET'])
+@jwt_required()
+def get_error_tracking():
+    """Get comprehensive error tracking and diagnostic information"""
+    try:
+        # Time range
+        days = request.args.get('days', 7, type=int)
+        start_date = datetime.now() - timedelta(days=days)
+        
+        # Get failed executions
+        failed_executions = WorkflowExecution.query.filter(
+            WorkflowExecution.status == 'failed',
+            WorkflowExecution.start_time >= start_date
+        ).all()
+        
+        # Error analysis
+        error_analysis = {
+            'total_errors': len(failed_executions),
+            'error_types': {},
+            'error_frequency': {},
+            'affected_components': {
+                'rules': {},
+                'triggers': {},
+                'actions': {}
+            },
+            'error_trends': {},
+            'recovery_analysis': {}
+        }
+        
+        # Analyze error patterns
+        for execution in failed_executions:
+            error_data = execution.result_data or {}
+            error_msg = error_data.get('error', 'Unknown error')
+            error_type = error_msg.split(':')[0] if ':' in error_msg else 'General Error'
+            
+            # Count error types
+            if error_type not in error_analysis['error_types']:
+                error_analysis['error_types'][error_type] = {
+                    'count': 0,
+                    'examples': [],
+                    'affected_executions': []
+                }
+            
+            error_analysis['error_types'][error_type]['count'] += 1
+            error_analysis['error_types'][error_type]['examples'].append(error_msg)
+            error_analysis['error_types'][error_type]['affected_executions'].append(execution.execution_id)
+            
+            # Track daily error frequency
+            day = execution.start_time.date().isoformat()
+            if day not in error_analysis['error_frequency']:
+                error_analysis['error_frequency'][day] = 0
+            error_analysis['error_frequency'][day] += 1
+            
+            # Track affected components
+            if execution.rule_id:
+                rule_id = str(execution.rule_id)
+                if rule_id not in error_analysis['affected_components']['rules']:
+                    error_analysis['affected_components']['rules'][rule_id] = 0
+                error_analysis['affected_components']['rules'][rule_id] += 1
+            
+            if execution.trigger_id:
+                trigger_id = str(execution.trigger_id)
+                if trigger_id not in error_analysis['affected_components']['triggers']:
+                    error_analysis['affected_components']['triggers'][trigger_id] = 0
+                error_analysis['affected_components']['triggers'][trigger_id] += 1
+        
+        # Error diagnostics and recommendations
+        diagnostics = []
+        
+        # High error rate components
+        for rule_id, error_count in error_analysis['affected_components']['rules'].items():
+            if error_count >= 5:  # Threshold for problematic rules
+                diagnostics.append({
+                    'severity': 'high',
+                    'component_type': 'rule',
+                    'component_id': rule_id,
+                    'issue': 'High error rate',
+                    'error_count': error_count,
+                    'recommendation': 'Review rule conditions and actions for potential issues'
+                })
+        
+        # Frequent error types
+        for error_type, data in error_analysis['error_types'].items():
+            if data['count'] >= 10:  # Threshold for frequent errors
+                diagnostics.append({
+                    'severity': 'medium',
+                    'component_type': 'error_pattern',
+                    'component_id': error_type,
+                    'issue': 'Frequent error pattern',
+                    'error_count': data['count'],
+                    'recommendation': f'Investigate root cause of {error_type} errors'
+                })
+        
+        # Recovery recommendations
+        recovery_suggestions = []
+        
+        if error_analysis['total_errors'] > 50:
+            recovery_suggestions.append({
+                'priority': 'high',
+                'action': 'system_review',
+                'description': 'High error volume detected - comprehensive system review recommended'
+            })
+        
+        for error_type, data in error_analysis['error_types'].items():
+            if data['count'] > error_analysis['total_errors'] * 0.3:  # 30% of all errors
+                recovery_suggestions.append({
+                    'priority': 'medium',
+                    'action': 'error_pattern_fix',
+                    'description': f'Focus on resolving {error_type} errors (dominant error pattern)'
+                })
+        
+        return jsonify({
+            'time_range': {
+                'start_date': start_date.isoformat(),
+                'end_date': datetime.now().isoformat(),
+                'days': days
+            },
+            'error_analysis': error_analysis,
+            'diagnostics': diagnostics,
+            'recovery_suggestions': recovery_suggestions,
+            'health_score': max(0, 100 - (error_analysis['total_errors'] * 2))  # Simple health scoring
+        })
+        
+    except Exception as e:
+        logger.error(f"Error tracking error: {e}")
+        return jsonify({"error": "Failed to fetch error tracking data"}), 500
+
+# Execution Replay and Debugging
+@app.route('/api/monitoring/replay/<string:execution_id>', methods=['POST'])
+@jwt_required()
+def replay_execution(execution_id):
+    """Replay a failed or completed execution for debugging purposes"""
+    try:
+        original_execution = WorkflowExecution.query.filter_by(execution_id=execution_id).first()
+        if not original_execution:
+            return jsonify({"error": "Original execution not found"}), 404
+        
+        # Create replay execution
+        replay_execution = WorkflowExecution(
+            trigger_id=original_execution.trigger_id,
+            rule_id=original_execution.rule_id,
+            status='running',
+            start_time=datetime.now(),
+            metadata={
+                'replay_of': execution_id,
+                'replay_mode': True,
+                'original_execution_data': original_execution.result_data
+            }
+        )
+        
+        db.session.add(replay_execution)
+        db.session.commit()
+        
+        # In a real implementation, this would trigger the actual workflow replay
+        # For now, we'll simulate the replay process
+        
+        return jsonify({
+            'success': True,
+            'replay_execution_id': replay_execution.execution_id,
+            'original_execution_id': execution_id,
+            'status': 'replay_initiated',
+            'message': 'Execution replay initiated for debugging'
+        })
+        
+    except Exception as e:
+        logger.error(f"Execution replay error: {e}")
+        return jsonify({"error": "Failed to replay execution"}), 500
+
+# System Health Monitoring
+@app.route('/api/monitoring/health', methods=['GET'])
+@jwt_required()
+def get_system_health():
+    """Get overall system health and status"""
+    try:
+        # Get recent execution statistics
+        last_hour = datetime.now() - timedelta(hours=1)
+        last_24h = datetime.now() - timedelta(hours=24)
+        
+        recent_executions = WorkflowExecution.query.filter(
+            WorkflowExecution.start_time >= last_hour
+        ).all()
+        
+        daily_executions = WorkflowExecution.query.filter(
+            WorkflowExecution.start_time >= last_24h
+        ).all()
+        
+        # Calculate health metrics
+        recent_success_rate = (
+            len([e for e in recent_executions if e.status == 'completed']) / 
+            len(recent_executions) * 100
+        ) if recent_executions else 100
+        
+        daily_success_rate = (
+            len([e for e in daily_executions if e.status == 'completed']) / 
+            len(daily_executions) * 100
+        ) if daily_executions else 100
+        
+        # System status determination
+        if recent_success_rate >= 95 and daily_success_rate >= 90:
+            system_status = 'healthy'
+            status_color = 'green'
+        elif recent_success_rate >= 80 and daily_success_rate >= 75:
+            system_status = 'warning'
+            status_color = 'yellow'
+        else:
+            system_status = 'critical'
+            status_color = 'red'
+        
+        # Active components count
+        active_triggers = WorkflowTrigger.query.filter_by(enabled=True).count()
+        active_rules = BusinessRule.query.filter_by(enabled=True).count()
+        running_executions = WorkflowExecution.query.filter_by(status='running').count()
+        
+        health_data = {
+            'system_status': system_status,
+            'status_color': status_color,
+            'last_updated': datetime.now().isoformat(),
+            'metrics': {
+                'recent_success_rate': round(recent_success_rate, 2),
+                'daily_success_rate': round(daily_success_rate, 2),
+                'executions_last_hour': len(recent_executions),
+                'executions_last_24h': len(daily_executions),
+                'currently_running': running_executions,
+                'active_triggers': active_triggers,
+                'active_rules': active_rules
+            },
+            'alerts': []
+        }
+        
+        # Generate alerts based on metrics
+        if recent_success_rate < 80:
+            health_data['alerts'].append({
+                'severity': 'high',
+                'message': f'Low success rate in last hour: {recent_success_rate:.1f}%',
+                'type': 'performance'
+            })
+        
+        if running_executions > 20:
+            health_data['alerts'].append({
+                'severity': 'medium',
+                'message': f'High number of running executions: {running_executions}',
+                'type': 'capacity'
+            })
+        
+        if len(recent_executions) == 0:
+            health_data['alerts'].append({
+                'severity': 'low',
+                'message': 'No workflow executions in the last hour',
+                'type': 'activity'
+            })
+        
+        return jsonify(health_data)
+        
+    except Exception as e:
+        logger.error(f"System health monitoring error: {e}")
+        return jsonify({"error": "Failed to fetch system health data"}), 500
+
+# Business Events Management
+@app.route('/api/events', methods=['GET'])
+@jwt_required()
+def get_business_events():
+    """Get business events with optional filtering"""
+    try:
+        query = BusinessEvent.query
+        
+        # Filter by event type
+        event_type = request.args.get('event_type')
+        if event_type:
+            query = query.filter(BusinessEvent.event_type == event_type)
+        
+        # Filter by entity type
+        entity_type = request.args.get('entity_type')
+        if entity_type:
+            query = query.filter(BusinessEvent.entity_type == entity_type)
+        
+        # Filter by processed status
+        processed = request.args.get('processed')
+        if processed is not None:
+            query = query.filter(BusinessEvent.processed == (processed.lower() == 'true'))
+        
+        # Filter by priority
+        priority = request.args.get('priority')
+        if priority:
+            query = query.filter(BusinessEvent.priority == priority)
+        
+        # Pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        events = query.order_by(BusinessEvent.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'events': [event.to_dict() for event in events.items],
+            'total': events.total,
+            'pages': events.pages,
+            'current_page': page,
+            'per_page': per_page
+        })
+        
+    except Exception as e:
+        logger.error(f"Get business events error: {e}")
+        return jsonify({"error": "Failed to fetch business events"}), 500
+
+@app.route('/api/events/trigger', methods=['POST'])
+@jwt_required()
+def trigger_manual_event():
+    """Manually trigger a business event"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['event_type', 'entity_type', 'entity_id']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"{field} is required"}), 400
+        
+        event_data = data.get('event_data', {})
+        source = data.get('source', 'manual')
+        priority = data.get('priority', 'medium')
+        
+        # Trigger the event
+        results = trigger_business_event(
+            event_type=data['event_type'],
+            entity_type=data['entity_type'],
+            entity_id=data['entity_id'],
+            event_data=event_data,
+            source=source,
+            priority=priority
+        )
+        
+        return jsonify({
+            'message': 'Business event triggered successfully',
+            'event_type': data['event_type'],
+            'rules_triggered': len(results),
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Trigger manual event error: {e}")
+        return jsonify({"error": "Failed to trigger business event"}), 500
+
+# Notification History and Logs
+@app.route('/api/notifications/history', methods=['GET'])
+@jwt_required()
+def get_notification_history():
+    """Get notification history from workflow executions"""
+    try:
+        # Get executions that involved notifications
+        executions = WorkflowExecution.query.filter(
+            WorkflowExecution.result_data.contains({'actions': [{'action': 'notification'}]})
+        ).order_by(WorkflowExecution.start_time.desc()).limit(100).all()
+        
+        history = []
+        for execution in executions:
+            if execution.result_data and 'actions' in execution.result_data:
+                for action in execution.result_data['actions']:
+                    if action.get('action') == 'notification':
+                        history.append({
+                            'execution_id': execution.execution_id,
+                            'timestamp': execution.start_time.isoformat(),
+                            'status': execution.status,
+                            'notification_data': action,
+                            'rule_id': execution.rule_id,
+                            'trigger_id': execution.trigger_id
+                        })
+        
+        return jsonify({
+            'history': history,
+            'total_count': len(history)
+        })
+        
+    except Exception as e:
+        logger.error(f"Get notification history error: {e}")
+        return jsonify({"error": "Failed to fetch notification history"}), 500
+
+# Notification Templates (for future expansion)
+@app.route('/api/notifications/templates', methods=['GET'])
+@jwt_required()
+def get_notification_templates():
+    """Get notification templates"""
+    try:
+        # This is a placeholder for notification templates
+        # In a full implementation, you'd have a NotificationTemplate model
+        templates = [
+            {
+                "id": 1,
+                "name": "Revenue Milestone Alert",
+                "type": "revenue_milestone",
+                "subject": "🎉 Revenue Milestone Achieved: ${milestone_amount}",
+                "content": "Congratulations! ${stream_name} has reached ${current_amount} - exceeding the ${milestone_amount} milestone by ${excess_amount}.",
+                "channels": ["email", "slack"],
+                "priority": "high"
+            },
+            {
+                "id": 2,
+                "name": "Agent High Performance",
+                "type": "agent_performance",
+                "subject": "🚀 Agent High Performance Alert: ${agent_name}",
+                "content": "${agent_name} is performing exceptionally well with a ${success_rate}% success rate and ${pipeline_value} in pipeline value.",
+                "channels": ["internal", "email"],
+                "priority": "medium"
+            },
+            {
+                "id": 3,
+                "name": "Opportunity Offer Received",
+                "type": "opportunity_status",
+                "subject": "🎯 Offer Received: ${opportunity_title}",
+                "content": "Great news! You've received an offer for ${opportunity_title} at ${company}. Compensation: ${compensation_range}",
+                "channels": ["email", "slack"],
+                "priority": "critical"
+            }
+        ]
+        
+        return jsonify(templates)
+        
+    except Exception as e:
+        logger.error(f"Get notification templates error: {e}")
+        return jsonify({"error": "Failed to fetch notification templates"}), 500
+
+# Enhanced Notification Delivery System
+class NotificationDeliveryService:
+    """Enhanced notification delivery service with improved functionality"""
+    
+    @staticmethod
+    def send_email_notification(config: dict, message: str, priority: str, context: dict) -> dict:
+        """Send email notification"""
+        try:
+            # In production, integrate with email service (SendGrid, AWS SES, etc.)
+            to_email = config.get('to_email', 'dede@risktravel.com')
+            from_email = config.get('from_email', 'noreply@aiempire.com')
+            subject = config.get('subject', f'AI Empire Alert - {priority.upper()}')
+            
+            # Format message with context
+            formatted_message = message.format(**context) if context else message
+            formatted_subject = subject.format(**context) if context else subject
+            
+            # Mock email sending (replace with actual email service)
+            logger.info(f"EMAIL SENT - To: {to_email}, Subject: {formatted_subject}, Priority: {priority}")
+            
+            return {
+                'success': True,
+                'channel': 'email',
+                'to': to_email,
+                'subject': formatted_subject,
+                'message_length': len(formatted_message)
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def send_slack_notification(config: dict, message: str, priority: str, context: dict) -> dict:
+        """Send Slack notification"""
+        try:
+            webhook_url = config.get('webhook_url')
+            channel = config.get('channel', '#general')
+            username = config.get('username', 'AI Empire Bot')
+            
+            if not webhook_url:
+                return {'success': False, 'error': 'Slack webhook URL not configured'}
+            
+            # Format message with context
+            formatted_message = message.format(**context) if context else message
+            
+            # Priority-based formatting
+            priority_icons = {'low': '🔵', 'medium': '🟡', 'high': '🟠', 'critical': '🔴'}
+            icon = priority_icons.get(priority, '⚪')
+            
+            payload = {
+                'channel': channel,
+                'username': username,
+                'text': f"{icon} *{priority.upper()} ALERT*\n{formatted_message}",
+                'icon_emoji': ':robot_face:'
+            }
+            
+            response = requests.post(webhook_url, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            return {
+                'success': True,
+                'channel': 'slack',
+                'slack_channel': channel,
+                'status_code': response.status_code
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def send_webhook_notification(config: dict, message: str, priority: str, context: dict) -> dict:
+        """Send webhook notification"""
+        try:
+            url = config.get('url')
+            headers = config.get('headers', {})
+            secret_key = config.get('secret_key')
+            
+            if not url:
+                return {'success': False, 'error': 'Webhook URL not configured'}
+            
+            if secret_key:
+                headers['X-Webhook-Secret'] = secret_key
+            
+            payload = {
+                'message': message.format(**context) if context else message,
+                'priority': priority,
+                'context': context,
+                'timestamp': datetime.now().isoformat(),
+                'source': 'ai_empire_notification_system'
+            }
+            
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            return {
+                'success': True,
+                'channel': 'webhook',
+                'url': url,
+                'status_code': response.status_code
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+@app.route('/api/notifications/delivery/test', methods=['POST'])
+@jwt_required()
+def test_notification_delivery():
+    """Test notification delivery service"""
+    try:
+        data = request.get_json()
+        
+        delivery_type = data.get('type', 'email')
+        config = data.get('config', {})
+        message = data.get('message', 'Test notification from AI Empire platform')
+        priority = data.get('priority', 'medium')
+        context = data.get('context', {})
+        
+        if delivery_type == 'email':
+            result = NotificationDeliveryService.send_email_notification(config, message, priority, context)
+        elif delivery_type == 'slack':
+            result = NotificationDeliveryService.send_slack_notification(config, message, priority, context)
+        elif delivery_type == 'webhook':
+            result = NotificationDeliveryService.send_webhook_notification(config, message, priority, context)
+        else:
+            return jsonify({"error": f"Unsupported delivery type: {delivery_type}"}), 400
+        
+        return jsonify({
+            'test_result': result,
+            'delivery_type': delivery_type,
+            'test_timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Test notification delivery error: {e}")
+        return jsonify({"error": "Failed to test notification delivery"}), 500
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])

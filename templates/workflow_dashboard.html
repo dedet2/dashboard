@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Automation Dashboard - AI Empire</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .status-running { color: #10b981; }
+        .status-failed { color: #ef4444; }
+        .status-completed { color: #3b82f6; }
+        .status-pending { color: #f59e0b; }
+        
+        .trigger-event { background-color: #dbeafe; border-left: 4px solid #3b82f6; }
+        .trigger-schedule { background-color: #d1fae5; border-left: 4px solid #10b981; }
+        .trigger-webhook { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
+        .trigger-manual { background-color: #e5e7eb; border-left: 4px solid #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold">
+                        <i class="fas fa-cogs mr-2"></i>
+                        AI Empire - Workflow Automation
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/dashboard" class="hover:bg-white hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-chart-line mr-1"></i>Dashboard
+                    </a>
+                    <a href="/bi" class="hover:bg-white hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-analytics mr-1"></i>BI
+                    </a>
+                    <a href="/executive-pipeline" class="hover:bg-white hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-briefcase mr-1"></i>Opportunities
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Dashboard Header -->
+        <div class="mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Statistics Cards -->
+                <div class="bg-white overflow-hidden shadow rounded-lg card-shadow">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-play-circle text-blue-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Active Triggers</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="active-triggers">-</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-shadow">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-rules text-green-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Business Rules</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="total-rules">-</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-shadow">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-chart-line text-yellow-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Success Rate</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="success-rate">-</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-shadow">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-clock text-purple-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Executions Today</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="executions-today">-</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="bg-white shadow rounded-lg card-shadow">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" 
+                            data-tab="triggers" onclick="switchTab('triggers')">
+                        <i class="fas fa-bolt mr-2"></i>Triggers
+                    </button>
+                    <button class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" 
+                            data-tab="rules" onclick="switchTab('rules')">
+                        <i class="fas fa-list-check mr-2"></i>Business Rules
+                    </button>
+                    <button class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" 
+                            data-tab="schedules" onclick="switchTab('schedules')">
+                        <i class="fas fa-calendar-alt mr-2"></i>Schedules
+                    </button>
+                    <button class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" 
+                            data-tab="executions" onclick="switchTab('executions')">
+                        <i class="fas fa-history mr-2"></i>Executions
+                    </button>
+                    <button class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" 
+                            data-tab="notifications" onclick="switchTab('notifications')">
+                        <i class="fas fa-bell mr-2"></i>Notifications
+                    </button>
+                    <button class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" 
+                            data-tab="analytics" onclick="switchTab('analytics')">
+                        <i class="fas fa-chart-bar mr-2"></i>Analytics
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Triggers Tab -->
+                <div id="triggers-tab" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Workflow Triggers</h3>
+                        <button onclick="showCreateTriggerModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-plus mr-2"></i>Create Trigger
+                        </button>
+                    </div>
+                    <div id="triggers-list" class="space-y-4">
+                        <!-- Triggers will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Business Rules Tab -->
+                <div id="rules-tab" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Business Rules</h3>
+                        <button onclick="showCreateRuleModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-plus mr-2"></i>Create Rule
+                        </button>
+                    </div>
+                    <div id="rules-list" class="space-y-4">
+                        <!-- Rules will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Schedules Tab -->
+                <div id="schedules-tab" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Workflow Schedules</h3>
+                        <div class="flex space-x-2">
+                            <button onclick="showScheduleTemplates()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-template mr-2"></i>Templates
+                            </button>
+                            <button onclick="showCreateScheduleModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-plus mr-2"></i>Create Schedule
+                            </button>
+                        </div>
+                    </div>
+                    <div id="schedules-list" class="space-y-4">
+                        <!-- Schedules will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Executions Tab -->
+                <div id="executions-tab" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Workflow Executions</h3>
+                        <div class="flex space-x-2">
+                            <select id="execution-filter" onchange="loadWorkflowExecutions()" class="border-gray-300 rounded-md shadow-sm text-sm">
+                                <option value="">All Status</option>
+                                <option value="running">Running</option>
+                                <option value="completed">Completed</option>
+                                <option value="failed">Failed</option>
+                            </select>
+                            <button onclick="loadWorkflowExecutions()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-sync-alt mr-2"></i>Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div id="executions-list" class="space-y-4">
+                        <!-- Executions will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Notifications Tab -->
+                <div id="notifications-tab" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-medium text-gray-900">Notification Channels</h3>
+                        <button onclick="showCreateNotificationModal()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-plus mr-2"></i>Add Channel
+                        </button>
+                    </div>
+                    <div id="notifications-list" class="space-y-4">
+                        <!-- Notification channels will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Analytics Tab -->
+                <div id="analytics-tab" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Execution Trends Chart -->
+                        <div class="bg-white p-6 rounded-lg border">
+                            <h4 class="text-lg font-medium mb-4">Execution Trends (Last 7 Days)</h4>
+                            <canvas id="execution-trends-chart" width="400" height="200"></canvas>
+                        </div>
+                        <!-- Success Rate Chart -->
+                        <div class="bg-white p-6 rounded-lg border">
+                            <h4 class="text-lg font-medium mb-4">Success Rate by Rule</h4>
+                            <canvas id="success-rate-chart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <div class="bg-white p-6 rounded-lg border">
+                            <h4 class="text-lg font-medium mb-4">Performance Metrics</h4>
+                            <div id="performance-metrics" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <!-- Performance metrics will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Create Trigger Modal -->
+    <div id="create-trigger-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Create Workflow Trigger</h3>
+                <form id="create-trigger-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                        <input type="text" name="name" required class="w-full border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea name="description" class="w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Trigger Type</label>
+                        <select name="trigger_type" required class="w-full border-gray-300 rounded-md shadow-sm">
+                            <option value="event">Event-based</option>
+                            <option value="schedule">Scheduled</option>
+                            <option value="webhook">Webhook</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Event Type</label>
+                        <select name="event_type" required class="w-full border-gray-300 rounded-md shadow-sm">
+                            <option value="revenue_milestone">Revenue Milestone</option>
+                            <option value="agent_performance">Agent Performance</option>
+                            <option value="opportunity_status">Opportunity Status</option>
+                            <option value="custom">Custom Event</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideCreateTriggerModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            Create
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Rule Modal -->
+    <div id="create-rule-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Create Business Rule</h3>
+                <form id="create-rule-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                        <input type="text" name="name" required class="w-full border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea name="description" class="w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Trigger</label>
+                        <select name="trigger_id" required id="rule-trigger-select" class="w-full border-gray-300 rounded-md shadow-sm">
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="hideCreateRuleModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            Create
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <i class="fas fa-spinner fa-spin text-blue-500 text-2xl mr-3"></i>
+            <span class="text-gray-700">Loading...</span>
+        </div>
+    </div>
+
+    <script src="/static/js/workflow-dashboard.js"></script>
+</body>
+</html>

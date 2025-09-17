@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Opportunity Pipeline - AI Empire Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .kanban-column { 
+            min-height: 600px; 
+            background: #f8fafc; 
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        .kanban-column:hover { 
+            box-shadow: 0 8px 30px rgba(0,0,0,0.1); 
+            transform: translateY(-2px);
+        }
+        .opportunity-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: grab;
+        }
+        .opportunity-card:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        .opportunity-card:active {
+            cursor: grabbing;
+        }
+        .priority-high { border-left: 4px solid #ef4444; }
+        .priority-medium { border-left: 4px solid #f59e0b; }
+        .priority-low { border-left: 4px solid #10b981; }
+        .match-score {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-prospect { background: #e0e7ff; color: #3730a3; }
+        .status-applied { background: #fef3c7; color: #92400e; }
+        .status-interview { background: #dbeafe; color: #1e40af; }
+        .status-offer { background: #d1fae5; color: #065f46; }
+        .status-accepted { background: #dcfce7; color: #166534; }
+        .status-rejected { background: #fee2e2; color: #991b1b; }
+        .board-icon { color: #8b5cf6; }
+        .executive-icon { color: #3b82f6; }
+        .speaking-icon { color: #f59e0b; }
+        .advisor-icon { color: #10b981; }
+        .filter-active { 
+            background: linear-gradient(135deg, #667eea, #764ba2); 
+            color: white; 
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white p-4 shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <h1 class="text-2xl font-bold">🎯 Executive Opportunity Pipeline</h1>
+                <span class="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm">
+                    AI-Powered Pipeline Management
+                </span>
+            </div>
+            <div class="flex space-x-3 items-center">
+                <button id="addOpportunityBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center">
+                    <i class="fas fa-plus mr-2"></i>New Opportunity
+                </button>
+                <button id="speakingHunterBtn" class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors flex items-center">
+                    <i class="fas fa-search mr-2"></i>Hunt Speaking Opps
+                </button>
+                <button id="analyticsBtn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center">
+                    <i class="fas fa-chart-bar mr-2"></i>Analytics
+                </button>
+                <a href="/dashboard" class="bg-gray-600 px-4 py-2 rounded-lg hover:bg-gray-700">
+                    <i class="fas fa-arrow-left mr-2"></i>Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Pipeline Summary Cards -->
+    <div class="container mx-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Total Opportunities</p>
+                        <p class="text-3xl font-bold text-gray-900" id="totalOpportunities">0</p>
+                    </div>
+                    <div class="text-3xl text-blue-500"><i class="fas fa-briefcase"></i></div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Active Interviews</p>
+                        <p class="text-3xl font-bold text-green-600" id="activeInterviews">0</p>
+                    </div>
+                    <div class="text-3xl text-green-500"><i class="fas fa-users"></i></div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Pending Offers</p>
+                        <p class="text-3xl font-bold text-orange-600" id="pendingOffers">0</p>
+                    </div>
+                    <div class="text-3xl text-orange-500"><i class="fas fa-handshake"></i></div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Success Rate</p>
+                        <p class="text-3xl font-bold text-purple-600" id="successRate">0%</p>
+                    </div>
+                    <div class="text-3xl text-purple-500"><i class="fas fa-trophy"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters and Controls -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm font-medium text-gray-700">Filter by Type:</label>
+                    <button class="filter-btn px-3 py-1 rounded-full text-sm transition-all" data-filter="all">All</button>
+                    <button class="filter-btn px-3 py-1 rounded-full text-sm transition-all" data-filter="board_director">
+                        <i class="fas fa-chess-king board-icon mr-1"></i>Board Director
+                    </button>
+                    <button class="filter-btn px-3 py-1 rounded-full text-sm transition-all" data-filter="executive_position">
+                        <i class="fas fa-crown executive-icon mr-1"></i>Executive
+                    </button>
+                    <button class="filter-btn px-3 py-1 rounded-full text-sm transition-all" data-filter="advisor">
+                        <i class="fas fa-lightbulb advisor-icon mr-1"></i>Advisor
+                    </button>
+                    <button class="filter-btn px-3 py-1 rounded-full text-sm transition-all" data-filter="speaking">
+                        <i class="fas fa-microphone speaking-icon mr-1"></i>Speaking
+                    </button>
+                </div>
+                <div class="flex items-center space-x-2 ml-auto">
+                    <label class="text-sm font-medium text-gray-700">Sort by:</label>
+                    <select id="sortBy" class="border border-gray-300 rounded-md px-3 py-1 text-sm">
+                        <option value="ai_match_score">AI Match Score</option>
+                        <option value="created_at">Date Added</option>
+                        <option value="deadline">Deadline</option>
+                        <option value="priority_level">Priority</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kanban Board -->
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
+            <!-- Prospect Column -->
+            <div class="kanban-column p-4" data-status="prospect">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-gray-700 flex items-center">
+                        <i class="fas fa-search mr-2 text-blue-500"></i>
+                        Prospect
+                    </h3>
+                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium" id="prospectCount">0</span>
+                </div>
+                <div class="space-y-3" id="prospectOpportunities">
+                    <!-- Opportunities will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Applied Column -->
+            <div class="kanban-column p-4" data-status="applied">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-gray-700 flex items-center">
+                        <i class="fas fa-paper-plane mr-2 text-yellow-500"></i>
+                        Applied
+                    </h3>
+                    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium" id="appliedCount">0</span>
+                </div>
+                <div class="space-y-3" id="appliedOpportunities">
+                    <!-- Opportunities will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Interview Stage Column -->
+            <div class="kanban-column p-4" data-status="interview_stage">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-gray-700 flex items-center">
+                        <i class="fas fa-users mr-2 text-purple-500"></i>
+                        Interview
+                    </h3>
+                    <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium" id="interviewCount">0</span>
+                </div>
+                <div class="space-y-3" id="interviewOpportunities">
+                    <!-- Opportunities will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Under Consideration Column -->
+            <div class="kanban-column p-4" data-status="under_consideration">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-gray-700 flex items-center">
+                        <i class="fas fa-clock mr-2 text-orange-500"></i>
+                        Under Review
+                    </h3>
+                    <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium" id="considerationCount">0</span>
+                </div>
+                <div class="space-y-3" id="considerationOpportunities">
+                    <!-- Opportunities will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Offer Received Column -->
+            <div class="kanban-column p-4" data-status="offer_received">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-gray-700 flex items-center">
+                        <i class="fas fa-handshake mr-2 text-green-500"></i>
+                        Offer
+                    </h3>
+                    <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium" id="offerCount">0</span>
+                </div>
+                <div class="space-y-3" id="offerOpportunities">
+                    <!-- Opportunities will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Closed Column -->
+            <div class="kanban-column p-4" data-status="closed">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-gray-700 flex items-center">
+                        <i class="fas fa-archive mr-2 text-gray-500"></i>
+                        Closed
+                    </h3>
+                    <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium" id="closedCount">0</span>
+                </div>
+                <div class="space-y-3" id="closedOpportunities">
+                    <!-- Opportunities will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Opportunity Modal -->
+    <div id="opportunityModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 id="modalTitle" class="text-2xl font-bold text-gray-900">Add New Opportunity</h2>
+                    <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <form id="opportunityForm" class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Basic Information -->
+                    <div class="space-y-4">
+                        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Opportunity Type *</label>
+                            <select id="opportunityType" class="w-full border border-gray-300 rounded-lg px-3 py-2" required>
+                                <option value="">Select type...</option>
+                                <option value="board_director">Board Director</option>
+                                <option value="executive_position">Executive Position</option>
+                                <option value="advisor">Advisor</option>
+                                <option value="speaking">Speaking Engagement</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+                            <input type="text" id="title" class="w-full border border-gray-300 rounded-lg px-3 py-2" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+                            <input type="text" id="company" class="w-full border border-gray-300 rounded-lg px-3 py-2" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                            <input type="text" id="location" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Compensation Range</label>
+                            <input type="text" id="compensationRange" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., $500K-750K + equity">
+                        </div>
+                    </div>
+                    
+                    <!-- Pipeline Information -->
+                    <div class="space-y-4">
+                        <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Pipeline Details</h3>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                            <select id="status" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="prospect">Prospect</option>
+                                <option value="applied">Applied</option>
+                                <option value="interview_stage">Interview Stage</option>
+                                <option value="under_consideration">Under Consideration</option>
+                                <option value="offer_received">Offer Received</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Priority Level</label>
+                            <select id="priorityLevel" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Application Date</label>
+                            <input type="date" id="applicationDate" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Deadline</label>
+                            <input type="date" id="deadline" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Source</label>
+                            <select id="source" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="">Select source...</option>
+                                <option value="linkedin">LinkedIn</option>
+                                <option value="referral">Referral</option>
+                                <option value="search">Direct Search</option>
+                                <option value="network">Network</option>
+                                <option value="hunter">AI Hunter</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Requirements -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Requirements (comma-separated)</label>
+                        <textarea id="requirements" class="w-full border border-gray-300 rounded-lg px-3 py-2 rows-3" placeholder="AI governance, board experience, risk management..."></textarea>
+                    </div>
+                    
+                    <!-- Notes -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                        <textarea id="notes" class="w-full border border-gray-300 rounded-lg px-3 py-2" rows="3"></textarea>
+                    </div>
+                    
+                    <!-- Next Step -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Next Step</label>
+                        <input type="text" id="nextStep" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Follow up with recruiter, prepare for interview...">
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+                    <button type="button" id="cancelForm" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Save Opportunity
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Opportunity Detail Modal -->
+    <div id="detailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div id="detailContent">
+                <!-- Detail content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Speaking Hunter Modal -->
+    <div id="hunterModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-screen overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold text-gray-900">🔍 Speaking Opportunity Hunter</h2>
+                    <button id="closeHunter" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div id="hunterResults">
+                    <!-- Hunter results will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Modal -->
+    <div id="analyticsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-screen overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold text-gray-900">📊 Pipeline Analytics</h2>
+                    <button id="closeAnalytics" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div id="analyticsContent">
+                    <!-- Analytics content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/executive-pipeline.js?v=2"></script>
+</body>
+</html>
