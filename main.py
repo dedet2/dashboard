@@ -2994,7 +2994,7 @@ DASHBOARD_HTML = """
                     target_ytd: parseFloat(document.getElementById('targetYtd').value) || 0,
                     growth_rate: parseFloat(document.getElementById('growthRate').value) || 0,
                     sources: document.getElementById('sources').value.trim() 
-                        ? document.getElementById('sources').value.trim().split('\n').filter(s => s.trim())
+                        ? document.getElementById('sources').value.trim().split('\\n').filter(s => s.trim())
                         : [],
                     projections: {
                         "6_month": parseFloat(document.getElementById('projection6Month').value) || 0,
@@ -3186,7 +3186,7 @@ DASHBOARD_HTML = """
         
         function updateOverview(data) {
             const overview = data.empire_overview || data;
-            document.getElementById('totalRevenue').textContent = `$${overview.total_monthly_revenue.toLocaleString()}`;
+            document.getElementById('totalRevenue').textContent = '$' + overview.total_monthly_revenue.toLocaleString();
             document.getElementById('activeAgents').textContent = overview.active_agents;
             document.getElementById('appointments').textContent = overview.upcoming_retreats || 0;
         }
