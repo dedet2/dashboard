@@ -2914,15 +2914,15 @@ DASHBOARD_HTML = """
                 btn.classList.add('border-transparent', 'text-gray-500');
             });
             
-            document.querySelector(`[data-tab="${tabName}"]`).classList.remove('border-transparent', 'text-gray-500');
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('border-blue-500', 'text-blue-600');
+            document.querySelector('[data-tab="' + tabName + '"]').classList.remove('border-transparent', 'text-gray-500');
+            document.querySelector('[data-tab="' + tabName + '"]').classList.add('border-blue-500', 'text-blue-600');
             
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
             });
             
-            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
         }
         
         // Revenue Stream Management Functions
@@ -2967,7 +2967,7 @@ DASHBOARD_HTML = """
         function openDeleteModal(streamId, streamName) {
             deleteStreamId = streamId;
             document.querySelector('#deleteConfirmModal p').textContent = 
-                `Are you sure you want to delete "${streamName}"? This action cannot be undone.`;
+                'Are you sure you want to delete "' + streamName + '"? This action cannot be undone.';
             document.getElementById('deleteConfirmModal').classList.remove('hidden');
         }
         
@@ -3295,71 +3295,6 @@ DASHBOARD_HTML = """
                     </div>
                 </div>
             `).join('');
-        }
-        
-        // LinkedIn Tab Management
-        function initializeLinkedInTabs() {
-            const linkedinTabBtns = document.querySelectorAll('.linkedin-tab-btn');
-            const linkedinTabContents = document.querySelectorAll('.linkedin-tab-content');
-            
-            linkedinTabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    // Update active tab button
-                    linkedinTabBtns.forEach(b => {
-                        b.classList.remove('border-blue-500', 'text-blue-600');
-                        b.classList.add('border-transparent', 'text-gray-500');
-                    });
-                    btn.classList.remove('border-transparent', 'text-gray-500');
-                    btn.classList.add('border-blue-500', 'text-blue-600');
-                    
-                    // Update visible tab content
-                    const targetTab = btn.getAttribute('data-tab');
-                    linkedinTabContents.forEach(content => {
-                        content.classList.add('hidden');
-                    });
-                    
-                    const targetContent = document.getElementById(targetTab + 'Tab');
-                    if (targetContent) {
-                        targetContent.classList.remove('hidden');
-                    }
-                });
-            });
-        }
-        
-        // Initialize LinkedIn dashboard when tab is selected
-        function initializeLinkedInDashboard() {
-            if (window.LinkedInDashboard) {
-                window.linkedInDashboard = new window.LinkedInDashboard();
-            }
-        }
-        
-        // Override existing tab switching to handle LinkedIn
-        function switchTab(tabName) {
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            
-            // Update tab buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            // Show selected tab
-            const selectedTab = document.getElementById(tabName + '-tab');
-            if (selectedTab) {
-                selectedTab.classList.remove('hidden');
-            }
-            
-            // Update selected tab button
-            const selectedBtn = document.querySelector(`[data-tab="${tabName}"]`);
-            if (selectedBtn) {
-                selectedBtn.classList.remove('border-transparent', 'text-gray-500');
-                selectedBtn.classList.add('border-blue-500', 'text-blue-600');
-            }
-            
-            // Note: LinkedIn dashboard functionality temporarily disabled
         }
     </script>
 </body>
