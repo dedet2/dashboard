@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Management - RiskTravel Intelligence</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --dark-bg: #1a252f;
+            --card-bg: #2c3e50;
+            --text-light: #ecf0f1;
+            --border-color: #34495e;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, var(--primary-color) 100%);
+            color: var(--text-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: rgba(44, 62, 80, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .card-header {
+            background: rgba(52, 73, 94, 0.8);
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 12px 12px 0 0 !important;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, var(--secondary-color), #2980b9);
+            border: none;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(45deg, #2980b9, var(--secondary-color));
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(45deg, var(--success-color), #229954);
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(45deg, var(--warning-color), #e67e22);
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, var(--danger-color), #c0392b);
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .form-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 8px;
+        }
+        
+        .form-control:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--secondary-color);
+            color: var(--text-light);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        
+        .form-control::placeholder {
+            color: rgba(236, 240, 241, 0.6);
+        }
+        
+        .form-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            border-radius: 8px;
+        }
+        
+        .form-select:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--secondary-color);
+            color: var(--text-light);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        
+        .nav-link {
+            color: var(--text-light) !important;
+            transition: color 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            color: var(--secondary-color) !important;
+        }
+        
+        .navbar-brand {
+            color: var(--text-light) !important;
+            font-weight: bold;
+        }
+        
+        .status-scheduled {
+            background: var(--warning-color);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .status-completed {
+            background: var(--success-color);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .status-cancelled {
+            background: var(--danger-color);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .alert {
+            border: none;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .alert-success {
+            background: rgba(39, 174, 96, 0.2);
+            color: #2ecc71;
+            border-left: 4px solid #2ecc71;
+        }
+        
+        .alert-danger {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .table-dark {
+            --bs-table-bg: rgba(44, 62, 80, 0.8);
+            --bs-table-border-color: var(--border-color);
+        }
+        
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(45deg, var(--secondary-color), #2980b9);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--secondary-color);
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-heartbeat me-2"></i>Healthcare Management
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/ai-agents">
+                            <i class="fas fa-robot me-1"></i>AI Agents
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/healthcare">
+                            <i class="fas fa-heartbeat me-1"></i>Healthcare
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="refreshData()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container" style="margin-top: 100px;">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-0">
+                    <i class="fas fa-heartbeat me-2"></i>Healthcare Management
+                </h1>
+                <p class="text-muted mb-0">Manage healthcare providers, appointments, and health metrics</p>
+            </div>
+        </div>
+
+        <!-- Dashboard Statistics -->
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalProviders">-</div>
+                <div class="stat-label">Total Providers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalAppointments">-</div>
+                <div class="stat-label">Appointments</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="upcomingAppointments">-</div>
+                <div class="stat-label">Upcoming</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalMetrics">-</div>
+                <div class="stat-label">Health Metrics</div>
+            </div>
+        </div>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <a class="nav-link active" id="providers-tab" data-bs-toggle="tab" href="#providers">
+                    <i class="fas fa-user-md me-2"></i>Providers
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="appointments-tab" data-bs-toggle="tab" href="#appointments">
+                    <i class="fas fa-calendar-check me-2"></i>Appointments
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="metrics-tab" data-bs-toggle="tab" href="#metrics">
+                    <i class="fas fa-chart-line me-2"></i>Health Metrics
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Providers Tab -->
+            <div class="tab-pane fade show active" id="providers">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Healthcare Providers</h5>
+                        <button class="btn btn-primary" onclick="createProvider()">
+                            <i class="fas fa-plus me-2"></i>Add Provider
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Specialty</th>
+                                        <th>Phone</th>
+                                        <th>Rating</th>
+                                        <th>Next Available</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="providersTable">
+                                    <!-- Providers will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appointments Tab -->
+            <div class="tab-pane fade" id="appointments">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Healthcare Appointments</h5>
+                        <button class="btn btn-primary" onclick="createAppointment()">
+                            <i class="fas fa-plus me-2"></i>Schedule Appointment
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Provider</th>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Purpose</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="appointmentsTable">
+                                    <!-- Appointments will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health Metrics Tab -->
+            <div class="tab-pane fade" id="metrics">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Health Metrics</h5>
+                        <button class="btn btn-primary" onclick="createMetric()">
+                            <i class="fas fa-plus me-2"></i>Add Metric
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Value</th>
+                                        <th>Unit</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="metricsTable">
+                                    <!-- Metrics will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Provider Modal -->
+    <div class="modal fade" id="providerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="providerModalTitle">Add Healthcare Provider</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="providerForm">
+                        <input type="hidden" id="providerId">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="providerName" class="form-label">Provider Name *</label>
+                                <input type="text" class="form-control" id="providerName" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="providerSpecialty" class="form-label">Specialty *</label>
+                                <input type="text" class="form-control" id="providerSpecialty" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="providerPhone" class="form-label">Phone</label>
+                                <input type="tel" class="form-control" id="providerPhone">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="providerRating" class="form-label">Rating</label>
+                                <select class="form-select" id="providerRating">
+                                    <option value="">Select Rating</option>
+                                    <option value="5.0">5.0 - Excellent</option>
+                                    <option value="4.5">4.5 - Very Good</option>
+                                    <option value="4.0">4.0 - Good</option>
+                                    <option value="3.5">3.5 - Average</option>
+                                    <option value="3.0">3.0 - Below Average</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="providerAddress" class="form-label">Address</label>
+                            <textarea class="form-control" id="providerAddress" rows="2"></textarea>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="providerNextAvailable" class="form-label">Next Available</label>
+                                <input type="date" class="form-control" id="providerNextAvailable">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="providerInsurance" class="form-label">Insurance Accepted</label>
+                                <input type="text" class="form-control" id="providerInsurance" placeholder="e.g., Blue Cross, Aetna">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="providerNotes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="providerNotes" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveProvider()">
+                        <i class="fas fa-save me-1"></i>Save Provider
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appointment Modal -->
+    <div class="modal fade" id="appointmentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appointmentModalTitle">Schedule Appointment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="appointmentForm">
+                        <input type="hidden" id="appointmentId">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="appointmentProvider" class="form-label">Provider *</label>
+                                <select class="form-select" id="appointmentProvider" required>
+                                    <option value="">Select Provider</option>
+                                    <!-- Providers will be populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="appointmentStatus" class="form-label">Status</label>
+                                <select class="form-select" id="appointmentStatus">
+                                    <option value="scheduled">Scheduled</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="appointmentDate" class="form-label">Date *</label>
+                                <input type="date" class="form-control" id="appointmentDate" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="appointmentTime" class="form-label">Time *</label>
+                                <input type="time" class="form-control" id="appointmentTime" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="appointmentPurpose" class="form-label">Purpose *</label>
+                            <input type="text" class="form-control" id="appointmentPurpose" required placeholder="e.g., Annual checkup, consultation">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="appointmentNotes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="appointmentNotes" rows="3" placeholder="Any special instructions or notes"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAppointment()">
+                        <i class="fas fa-save me-1"></i>Save Appointment
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Metric Modal -->
+    <div class="modal fade" id="metricModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="metricModalTitle">Add Health Metric</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="metricForm">
+                        <input type="hidden" id="metricId">
+                        
+                        <div class="mb-3">
+                            <label for="metricName" class="form-label">Metric Name *</label>
+                            <select class="form-select" id="metricName" required>
+                                <option value="">Select Metric</option>
+                                <option value="Blood Pressure">Blood Pressure</option>
+                                <option value="Heart Rate">Heart Rate</option>
+                                <option value="Weight">Weight</option>
+                                <option value="BMI">BMI</option>
+                                <option value="Cholesterol">Cholesterol</option>
+                                <option value="Blood Sugar">Blood Sugar</option>
+                                <option value="Temperature">Temperature</option>
+                                <option value="Sleep Hours">Sleep Hours</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3" id="customMetricDiv" style="display: none;">
+                            <label for="customMetricName" class="form-label">Custom Metric Name</label>
+                            <input type="text" class="form-control" id="customMetricName">
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="metricValue" class="form-label">Value *</label>
+                                <input type="text" class="form-control" id="metricValue" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="metricUnit" class="form-label">Unit *</label>
+                                <input type="text" class="form-control" id="metricUnit" required placeholder="e.g., mmHg, bpm, kg">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="metricStatus" class="form-label">Status</label>
+                                <select class="form-select" id="metricStatus">
+                                    <option value="normal">Normal</option>
+                                    <option value="high">High</option>
+                                    <option value="low">Low</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="metricDate" class="form-label">Date *</label>
+                                <input type="datetime-local" class="form-control" id="metricDate" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="metricTarget" class="form-label">Target Value</label>
+                            <input type="text" class="form-control" id="metricTarget" placeholder="Optional target value">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveMetric()">
+                        <i class="fas fa-save me-1"></i>Save Metric
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Global variables
+        let providers = [];
+        let appointments = [];
+        let metrics = [];
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            
+            // Handle custom metric selection
+            document.getElementById('metricName').addEventListener('change', function() {
+                const customDiv = document.getElementById('customMetricDiv');
+                if (this.value === 'Other') {
+                    customDiv.style.display = 'block';
+                    document.getElementById('customMetricName').required = true;
+                } else {
+                    customDiv.style.display = 'none';
+                    document.getElementById('customMetricName').required = false;
+                }
+            });
+            
+            // Set default date for new metric
+            document.getElementById('metricDate').value = new Date().toISOString().slice(0, 16);
+        });
+        
+        // Load all data
+        async function loadData() {
+            try {
+                showLoading(true);
+                
+                // Parallel data loading
+                const [providersResponse, appointmentsResponse, metricsResponse] = await Promise.all([
+                    fetch('/api/healthcare/providers'),
+                    fetch('/api/healthcare/appointments'),
+                    fetch('/api/healthcare/metrics')
+                ]);
+                
+                if (!providersResponse.ok || !appointmentsResponse.ok || !metricsResponse.ok) {
+                    throw new Error('Failed to fetch data');
+                }
+                
+                providers = await providersResponse.json();
+                appointments = await appointmentsResponse.json();
+                metrics = await metricsResponse.json();
+                
+                updateUI();
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showAlert('Failed to load healthcare data: ' + error.message, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Update UI with loaded data
+        function updateUI() {
+            updateStats();
+            updateProvidersTable();
+            updateAppointmentsTable();
+            updateMetricsTable();
+            updateProviderDropdown();
+        }
+        
+        // Update dashboard statistics
+        function updateStats() {
+            document.getElementById('totalProviders').textContent = providers.length;
+            document.getElementById('totalAppointments').textContent = appointments.length;
+            
+            // Count upcoming appointments
+            const now = new Date();
+            const upcoming = appointments.filter(apt => {
+                const aptDate = new Date(apt.date);
+                return aptDate > now && apt.status === 'scheduled';
+            }).length;
+            document.getElementById('upcomingAppointments').textContent = upcoming;
+            
+            document.getElementById('totalMetrics').textContent = metrics.length;
+        }
+        
+        // Update providers table
+        function updateProvidersTable() {
+            const tbody = document.getElementById('providersTable');
+            tbody.innerHTML = '';
+            
+            providers.forEach(provider => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${provider.name}</td>
+                    <td>${provider.specialty}</td>
+                    <td>${provider.phone || 'N/A'}</td>
+                    <td>${provider.rating ? '★'.repeat(Math.floor(provider.rating)) + ' (' + provider.rating + ')' : 'N/A'}</td>
+                    <td>${provider.next_available || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary me-1" onclick="editProvider(${provider.id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProvider(${provider.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Update appointments table
+        function updateAppointmentsTable() {
+            const tbody = document.getElementById('appointmentsTable');
+            tbody.innerHTML = '';
+            
+            appointments.forEach(appointment => {
+                const provider = providers.find(p => p.name === appointment.provider);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${appointment.provider}</td>
+                    <td>${appointment.date}</td>
+                    <td>${appointment.time}</td>
+                    <td>${appointment.purpose}</td>
+                    <td><span class="status-${appointment.status}">${appointment.status.toUpperCase()}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary me-1" onclick="editAppointment(${appointment.id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteAppointment(${appointment.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Update metrics table
+        function updateMetricsTable() {
+            const tbody = document.getElementById('metricsTable');
+            tbody.innerHTML = '';
+            
+            metrics.forEach(metric => {
+                const row = document.createElement('tr');
+                const date = new Date(metric.date).toLocaleDateString();
+                row.innerHTML = `
+                    <td>${metric.metric}</td>
+                    <td>${metric.value}</td>
+                    <td>${metric.unit}</td>
+                    <td><span class="status-${metric.status || 'normal'}">${(metric.status || 'normal').toUpperCase()}</span></td>
+                    <td>${date}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="deleteMetric(${metric.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Update provider dropdown in appointment form
+        function updateProviderDropdown() {
+            const select = document.getElementById('appointmentProvider');
+            select.innerHTML = '<option value="">Select Provider</option>';
+            
+            providers.forEach(provider => {
+                const option = document.createElement('option');
+                option.value = provider.name;
+                option.textContent = `${provider.name} - ${provider.specialty}`;
+                select.appendChild(option);
+            });
+        }
+        
+        // Provider CRUD operations
+        function createProvider() {
+            document.getElementById('providerModalTitle').textContent = 'Add Healthcare Provider';
+            document.getElementById('providerForm').reset();
+            document.getElementById('providerId').value = '';
+            new bootstrap.Modal(document.getElementById('providerModal')).show();
+        }
+        
+        function editProvider(id) {
+            const provider = providers.find(p => p.id === id);
+            if (!provider) return;
+            
+            document.getElementById('providerModalTitle').textContent = 'Edit Healthcare Provider';
+            document.getElementById('providerId').value = provider.id;
+            document.getElementById('providerName').value = provider.name;
+            document.getElementById('providerSpecialty').value = provider.specialty;
+            document.getElementById('providerPhone').value = provider.phone || '';
+            document.getElementById('providerRating').value = provider.rating || '';
+            document.getElementById('providerAddress').value = provider.address || '';
+            document.getElementById('providerNextAvailable').value = provider.next_available || '';
+            document.getElementById('providerInsurance').value = (provider.insurance_accepted || []).join(', ');
+            document.getElementById('providerNotes').value = provider.notes || '';
+            
+            new bootstrap.Modal(document.getElementById('providerModal')).show();
+        }
+        
+        async function saveProvider() {
+            try {
+                const formData = {
+                    name: document.getElementById('providerName').value,
+                    specialty: document.getElementById('providerSpecialty').value,
+                    phone: document.getElementById('providerPhone').value || null,
+                    rating: parseFloat(document.getElementById('providerRating').value) || null,
+                    address: document.getElementById('providerAddress').value || null,
+                    next_available: document.getElementById('providerNextAvailable').value || null,
+                    insurance_accepted: document.getElementById('providerInsurance').value.split(',').map(s => s.trim()).filter(s => s),
+                    notes: document.getElementById('providerNotes').value || null
+                };
+                
+                const providerId = document.getElementById('providerId').value;
+                const url = providerId ? `/api/healthcare/providers/${providerId}` : '/api/healthcare/providers';
+                const method = providerId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) throw new Error('Failed to save provider');
+                
+                bootstrap.Modal.getInstance(document.getElementById('providerModal')).hide();
+                await loadData();
+                showAlert(`Provider ${providerId ? 'updated' : 'created'} successfully`, 'success');
+                
+            } catch (error) {
+                console.error('Error saving provider:', error);
+                showAlert('Failed to save provider: ' + error.message, 'danger');
+            }
+        }
+        
+        async function deleteProvider(id) {
+            if (!confirm('Are you sure you want to delete this provider?')) return;
+            
+            try {
+                const response = await fetch(`/api/healthcare/providers/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete provider');
+                
+                await loadData();
+                showAlert('Provider deleted successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error deleting provider:', error);
+                showAlert('Failed to delete provider: ' + error.message, 'danger');
+            }
+        }
+        
+        // Appointment CRUD operations
+        function createAppointment() {
+            document.getElementById('appointmentModalTitle').textContent = 'Schedule Appointment';
+            document.getElementById('appointmentForm').reset();
+            document.getElementById('appointmentId').value = '';
+            document.getElementById('appointmentStatus').value = 'scheduled';
+            new bootstrap.Modal(document.getElementById('appointmentModal')).show();
+        }
+        
+        function editAppointment(id) {
+            const appointment = appointments.find(a => a.id === id);
+            if (!appointment) return;
+            
+            document.getElementById('appointmentModalTitle').textContent = 'Edit Appointment';
+            document.getElementById('appointmentId').value = appointment.id;
+            document.getElementById('appointmentProvider').value = appointment.provider;
+            document.getElementById('appointmentDate').value = appointment.date;
+            document.getElementById('appointmentTime').value = appointment.time;
+            document.getElementById('appointmentPurpose').value = appointment.purpose;
+            document.getElementById('appointmentStatus').value = appointment.status;
+            document.getElementById('appointmentNotes').value = appointment.notes || '';
+            
+            new bootstrap.Modal(document.getElementById('appointmentModal')).show();
+        }
+        
+        async function saveAppointment() {
+            try {
+                const formData = {
+                    provider: document.getElementById('appointmentProvider').value,
+                    date: document.getElementById('appointmentDate').value,
+                    time: document.getElementById('appointmentTime').value,
+                    purpose: document.getElementById('appointmentPurpose').value,
+                    status: document.getElementById('appointmentStatus').value,
+                    notes: document.getElementById('appointmentNotes').value || null
+                };
+                
+                const appointmentId = document.getElementById('appointmentId').value;
+                const url = appointmentId ? `/api/healthcare/appointments/${appointmentId}` : '/api/healthcare/appointments';
+                const method = appointmentId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) throw new Error('Failed to save appointment');
+                
+                bootstrap.Modal.getInstance(document.getElementById('appointmentModal')).hide();
+                await loadData();
+                showAlert(`Appointment ${appointmentId ? 'updated' : 'scheduled'} successfully`, 'success');
+                
+            } catch (error) {
+                console.error('Error saving appointment:', error);
+                showAlert('Failed to save appointment: ' + error.message, 'danger');
+            }
+        }
+        
+        async function deleteAppointment(id) {
+            if (!confirm('Are you sure you want to delete this appointment?')) return;
+            
+            try {
+                const response = await fetch(`/api/healthcare/appointments/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete appointment');
+                
+                await loadData();
+                showAlert('Appointment deleted successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error deleting appointment:', error);
+                showAlert('Failed to delete appointment: ' + error.message, 'danger');
+            }
+        }
+        
+        // Health Metric CRUD operations
+        function createMetric() {
+            document.getElementById('metricModalTitle').textContent = 'Add Health Metric';
+            document.getElementById('metricForm').reset();
+            document.getElementById('metricId').value = '';
+            document.getElementById('metricStatus').value = 'normal';
+            document.getElementById('metricDate').value = new Date().toISOString().slice(0, 16);
+            new bootstrap.Modal(document.getElementById('metricModal')).show();
+        }
+        
+        async function saveMetric() {
+            try {
+                const metricName = document.getElementById('metricName').value === 'Other' 
+                    ? document.getElementById('customMetricName').value 
+                    : document.getElementById('metricName').value;
+                
+                const formData = {
+                    metric: metricName,
+                    value: document.getElementById('metricValue').value,
+                    unit: document.getElementById('metricUnit').value,
+                    status: document.getElementById('metricStatus').value,
+                    date: new Date(document.getElementById('metricDate').value).toISOString(),
+                    target: document.getElementById('metricTarget').value || null
+                };
+                
+                const response = await fetch('/api/healthcare/metrics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) throw new Error('Failed to save metric');
+                
+                bootstrap.Modal.getInstance(document.getElementById('metricModal')).hide();
+                await loadData();
+                showAlert('Health metric added successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error saving metric:', error);
+                showAlert('Failed to save metric: ' + error.message, 'danger');
+            }
+        }
+        
+        async function deleteMetric(id) {
+            if (!confirm('Are you sure you want to delete this health metric?')) return;
+            
+            try {
+                const response = await fetch(`/api/healthcare/metrics/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete metric');
+                
+                await loadData();
+                showAlert('Health metric deleted successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error deleting metric:', error);
+                showAlert('Failed to delete metric: ' + error.message, 'danger');
+            }
+        }
+        
+        // Utility functions
+        async function refreshData() {
+            await loadData();
+            showAlert('Data refreshed successfully', 'success');
+        }
+        
+        function showLoading(show) {
+            // Can implement loading spinner if needed
+        }
+        
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertId = 'alert-' + Date.now();
+            
+            const alertHtml = `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            alertContainer.insertAdjacentHTML('beforeend', alertHtml);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

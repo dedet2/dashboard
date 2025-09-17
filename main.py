@@ -1,9 +1,9 @@
 """
-Dr. Dédé's RiskTravel Intelligence Platform - Manus Deployment
+Dr. Dede's RiskTravel Intelligence Platform - Manus Deployment
 Optimized for deployment at https://hfqukiyd.manus.space/dashboard
 """
 
-from flask import Flask, jsonify, request, render_template_string, send_from_directory
+from flask import Flask, jsonify, request, render_template_string, render_template, send_from_directory, redirect
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
@@ -12,6 +12,7 @@ import logging
 import json
 import requests
 from dotenv import load_dotenv
+from database import db, RevenueStream, AIAgent, HealthcareProvider, HealthcareAppointment, HealthMetric, ExecutiveOpportunity, RetreatEvent, KPIMetric, Milestone, EnergyTracking, WellnessGoal, WellnessAlert, WellnessMetric
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +32,257 @@ AIRTABLE_BASE_URL = "https://api.airtable.com/v0"
 PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+# Database Configuration
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    # Convert postgres:// to postgresql:// for SQLAlchemy compatibility
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Fallback for development
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+    logger.warning("Using SQLite fallback database. Set DATABASE_URL environment variable for production.")
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize database
+db.init_app(app)
+def create_and_seed_database():
+    """Create database tables and seed with initial data"""
+    with app.app_context():
+        # Create all tables
+        db.create_all()
+        logger.info("Database tables created successfully")
+        
+        # Check if data already exists
+        if RevenueStream.query.first() is None:
+            logger.info("Seeding database with initial data...")
+            seed_database()
+            logger.info("Database seeded successfully")
+        else:
+            logger.info("Database already contains data, skipping seeding")
+
+def seed_database():
+    """Seed database with existing data from global lists"""
+    try:
+        # Seed Revenue Streams
+        for stream_data in REVENUE_STREAMS:
+            # Check if stream already exists
+            existing_stream = RevenueStream.query.filter_by(id=stream_data['id']).first()
+            if not existing_stream:
+                stream = RevenueStream(
+                    id=stream_data['id'],
+                    name=stream_data['name'],
+                    current_month=stream_data['current_month'],
+                    target_month=stream_data['target_month'],
+                    target_ytd=stream_data['target_ytd'],
+                    ytd=stream_data['ytd'],
+                    growth_rate=stream_data['growth_rate'],
+                    sources=stream_data['sources'],
+                    projections=stream_data['projections'],
+                    last_updated=datetime.fromisoformat(stream_data['last_updated'])
+                )
+                db.session.add(stream)
+        
+        # Seed AI Agents
+        for agent_data in AI_EMPIRE_AGENTS:
+            # Parse datetime fields
+            last_activity = None
+            next_scheduled = None
+            if agent_data.get('last_activity'):
+                last_activity = datetime.fromisoformat(agent_data['last_activity'])
+            if agent_data.get('next_scheduled'):
+                next_scheduled = datetime.fromisoformat(agent_data['next_scheduled'])
+            
+            # Extract known fields and put rest in additional_data
+            known_fields = ['id', 'name', 'tier', 'function', 'tools', 'status', 'performance', 'last_activity', 'next_scheduled']
+            additional_data = {k: v for k, v in agent_data.items() if k not in known_fields}
+            
+            agent = AIAgent(
+                id=agent_data['id'],
+                name=agent_data['name'],
+                tier=agent_data['tier'],
+                function=agent_data['function'],
+                tools=agent_data.get('tools', []),
+                status=agent_data.get('status', 'active'),
+                performance=agent_data.get('performance', {}),
+                last_activity=last_activity,
+                next_scheduled=next_scheduled,
+                additional_data=additional_data
+            )
+            db.session.add(agent)
+        
+        # Seed Healthcare Providers
+        for provider_data in HEALTHCARE_PROVIDERS:
+            provider = HealthcareProvider(
+                id=provider_data['id'],
+                name=provider_data['name'],
+                specialty=provider_data['specialty'],
+                phone=provider_data.get('phone'),
+                address=provider_data.get('address'),
+                rating=provider_data.get('rating', 0.0),
+                insurance_accepted=provider_data.get('insurance_accepted', []),
+                next_available=provider_data.get('next_available'),
+                notes=provider_data.get('notes')
+            )
+            db.session.add(provider)
+        
+        # Seed Healthcare Appointments
+        for appointment_data in HEALTHCARE_APPOINTMENTS:
+            appointment = HealthcareAppointment(
+                id=appointment_data['id'],
+                provider=appointment_data['provider'],
+                date=appointment_data['date'],
+                time=appointment_data['time'],
+                purpose=appointment_data['purpose'],
+                status=appointment_data.get('status', 'scheduled'),
+                notes=appointment_data.get('notes')
+            )
+            db.session.add(appointment)
+        
+        # Seed Health Metrics
+        for metric_data in HEALTH_METRICS:
+            metric = HealthMetric(
+                id=metric_data['id'],
+                metric=metric_data['metric'],
+                value=str(metric_data['value']),  # Convert to string to handle mixed types
+                unit=metric_data['unit'],
+                status=metric_data.get('status', 'normal'),
+                target=metric_data.get('target'),
+                date=datetime.fromisoformat(metric_data['date'])
+            )
+            db.session.add(metric)
+        
+        # Seed Executive Opportunities
+        for opp_data in EXECUTIVE_OPPORTUNITIES:
+            opportunity = ExecutiveOpportunity(
+                id=opp_data['id'],
+                type=opp_data['type'],
+                title=opp_data['title'],
+                company=opp_data['company'],
+                compensation=opp_data.get('compensation'),
+                location=opp_data.get('location'),
+                status=opp_data.get('status', 'prospect'),
+                match_score=opp_data.get('match_score', 0.0),
+                requirements=opp_data.get('requirements', []),
+                application_date=opp_data.get('application_date'),
+                next_step=opp_data.get('next_step'),
+                notes=opp_data.get('notes')
+            )
+            db.session.add(opportunity)
+        
+        # Seed Retreat Events
+        for event_data in RETREAT_EVENTS:
+            event = RetreatEvent(
+                id=event_data['id'],
+                name=event_data['name'],
+                type=event_data.get('type'),
+                dates=event_data['dates'],
+                location=event_data['location'],
+                capacity=event_data['capacity'],
+                registered=event_data.get('registered', 0),
+                pricing=event_data['pricing'],
+                status=event_data.get('status', 'planning'),
+                focus=event_data.get('focus', []),
+                amenities=event_data.get('amenities', []),
+                speakers=event_data.get('speakers', []),
+                revenue_projected=event_data.get('revenue_projected', 0.0)
+            )
+            db.session.add(event)
+        
+        # Seed KPI Metrics
+        for kpi_data in KPI_METRICS:
+            kpi = KPIMetric(
+                id=kpi_data['id'],
+                name=kpi_data['name'],
+                value=kpi_data['value'],
+                target=kpi_data['target'],
+                unit=kpi_data['unit'],
+                trend=kpi_data.get('trend', 'stable'),
+                change_percent=kpi_data.get('change_percent', 0.0),
+                category=kpi_data['category'],
+                empire_focus=kpi_data.get('empire_focus')
+            )
+            db.session.add(kpi)
+        
+        # Seed Milestones
+        for milestone_data in MILESTONES:
+            milestone = Milestone(
+                id=milestone_data['id'],
+                title=milestone_data['title'],
+                target_date=milestone_data['target_date'],
+                progress=milestone_data.get('progress', 0),
+                status=milestone_data.get('status', 'pending'),
+                description=milestone_data.get('description')
+            )
+            db.session.add(milestone)
+        
+        # Seed Energy Tracking
+        for energy_data in HEALTH_WELLNESS['energy_tracking']:
+            energy = EnergyTracking(
+                id=energy_data['id'],
+                date=datetime.fromisoformat(energy_data['date']),
+                energy_level=energy_data['energy_level'],
+                focus_level=energy_data['focus_level'],
+                stress_level=energy_data['stress_level'],
+                sleep_hours=energy_data['sleep_hours'],
+                recovery_time=energy_data['recovery_time'],
+                notes=energy_data.get('notes')
+            )
+            db.session.add(energy)
+        
+        # Seed Wellness Goals
+        for goal_data in HEALTH_WELLNESS['wellness_goals']:
+            goal = WellnessGoal(
+                id=goal_data['id'],
+                goal=goal_data['goal'],
+                current=goal_data['current'],
+                target=goal_data['target'],
+                status=goal_data.get('status', 'pending')
+            )
+            db.session.add(goal)
+        
+        # Seed Wellness Alerts
+        for alert_data in HEALTH_WELLNESS['alerts']:
+            alert = WellnessAlert(
+                id=alert_data['id'],
+                type=alert_data['type'],
+                message=alert_data['message'],
+                active=alert_data.get('active', True)
+            )
+            db.session.add(alert)
+        
+        # Commit all changes
+        db.session.commit()
+        logger.info("Database seeded with all existing data successfully")
+        
+    except Exception as e:
+        logger.error(f"Error seeding database: {e}")
+        db.session.rollback()
+        raise
+
+# Helper function to serialize SQLAlchemy objects to JSON
+def serialize_model(obj):
+    """Convert SQLAlchemy model instance to dictionary"""
+    if obj is None:
+        return None
+    
+    result = {}
+    for column in obj.__table__.columns:
+        value = getattr(obj, column.name)
+        if isinstance(value, datetime):
+            result[column.name] = value.isoformat()
+        elif isinstance(value, (list, dict)):
+            result[column.name] = value
+        else:
+            result[column.name] = value
+    return result
+
+def serialize_models(objects):
+    """Convert list of SQLAlchemy model instances to list of dictionaries"""
+    return [serialize_model(obj) for obj in objects]
 
 # Configuration
 jwt_secret = os.getenv('JWT_SECRET_KEY')
@@ -741,7 +993,7 @@ RETREAT_EVENTS = [
         "status": "registration_open",
         "focus": ["Executive wellness", "AI governance", "Sustainable leadership"],
         "amenities": ["Spa treatments", "Gourmet dining", "Private vineyard access"],
-        "speakers": ["Dr. Dédé", "Mindfulness expert", "Executive chef"],
+        "speakers": ["Dr. Dede", "Mindfulness expert", "Executive chef"],
         "revenue_projected": 312500
     },
     {
@@ -756,7 +1008,7 @@ RETREAT_EVENTS = [
         "status": "early_bird_pricing",
         "focus": ["Accessible AI design", "Inclusive leadership", "Innovation frameworks"],
         "amenities": ["Oceanfront venue", "Accessible accommodations", "Networking events"],
-        "speakers": ["Dr. Dédé", "Accessibility advocates", "Tech innovators"],
+        "speakers": ["Dr. Dede", "Accessibility advocates", "Tech innovators"],
         "revenue_projected": 525000
     },
     {
@@ -771,7 +1023,7 @@ RETREAT_EVENTS = [
         "status": "planning_phase",
         "focus": ["Board oversight of AI", "Risk governance", "Strategic planning"],
         "amenities": ["Luxury mountain lodge", "Ski access", "Private chef"],
-        "speakers": ["Dr. Dédé", "Board governance experts", "AI ethics specialists"],
+        "speakers": ["Dr. Dede", "Board governance experts", "AI ethics specialists"],
         "revenue_projected": 450000
     }
 ]
@@ -1112,7 +1364,7 @@ DASHBOARD_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dr. Dédé's RiskTravel Intelligence Platform</title>
+    <title>Dr. Dede's RiskTravel Intelligence Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <style>
@@ -1124,7 +1376,7 @@ DASHBOARD_HTML = """
     <!-- Navigation -->
     <nav class="gradient-bg text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">🏥 Dr. Dédé's RiskTravel Intelligence</h1>
+            <h1 class="text-2xl font-bold">🏥 Dr. Dede's RiskTravel Intelligence</h1>
             <div class="flex space-x-4">
                 <button id="loginBtn" class="bg-white text-blue-600 px-4 py-2 rounded hover:bg-gray-100">Login</button>
                 <button id="logoutBtn" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600 hidden">Logout</button>
@@ -1231,8 +1483,13 @@ DASHBOARD_HTML = """
             <div class="p-6">
                 <!-- Revenue Tab -->
                 <div id="revenue-tab" class="tab-content">
-                    <h3 class="text-lg font-semibold mb-4">Revenue Streams</h3>
-                    <div id="revenueStreams" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold">Revenue Streams Management</h3>
+                        <button id="addRevenueBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            <span class="mr-2">+</span>Add Revenue Stream
+                        </button>
+                    </div>
+                    <div id="revenueStreams" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <!-- Revenue streams will be loaded here -->
                     </div>
                 </div>
@@ -1275,10 +1532,77 @@ DASHBOARD_HTML = """
         </div>
     </div>
 
+    <!-- Revenue Stream Modal -->
+    <div id="revenueModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center h-full p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+                <div class="p-6">
+                    <h2 id="revenueModalTitle" class="text-2xl font-bold mb-6">Add Revenue Stream</h2>
+                    <form id="revenueForm">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Stream Name *</label>
+                                <input type="text" id="streamName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Current Month ($)</label>
+                                <input type="number" id="currentMonth" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" min="0" step="1000">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Target Month ($)</label>
+                                <input type="number" id="targetMonth" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" min="0" step="1000">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">YTD ($)</label>
+                                <input type="number" id="ytd" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" min="0" step="1000">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Target YTD ($)</label>
+                                <input type="number" id="targetYtd" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" min="0" step="1000">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Growth Rate (%)</label>
+                                <input type="number" id="growthRate" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" min="-100" step="0.1">
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">6-Month Projection ($)</label>
+                                <input type="number" id="projection6Month" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" min="0" step="1000">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Revenue Sources (one per line)</label>
+                                <textarea id="sources" rows="4" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter revenue sources, one per line"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-between mt-6">
+                            <button type="button" id="cancelRevenueForm" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancel</button>
+                            <button type="submit" id="submitRevenueForm" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center h-full p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <h2 class="text-xl font-bold mb-4 text-red-600">Confirm Delete</h2>
+                    <p class="text-gray-700 mb-6">Are you sure you want to delete this revenue stream? This action cannot be undone.</p>
+                    <div class="flex justify-between">
+                        <button id="cancelDelete" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">Cancel</button>
+                        <button id="confirmDelete" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Welcome Screen -->
     <div id="welcomeScreen" class="container mx-auto p-6">
         <div class="text-center py-20">
-            <h2 class="text-4xl font-bold text-gray-800 mb-4">Welcome to Dr. Dédé's RiskTravel Intelligence Platform</h2>
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">Welcome to Dr. Dede's RiskTravel Intelligence Platform</h2>
             <p class="text-xl text-gray-600 mb-8">Healthcare-Enhanced Business Intelligence Dashboard</p>
             <button id="getStartedBtn" class="bg-blue-500 text-white px-8 py-3 rounded-lg text-lg hover:bg-blue-600">Get Started</button>
         </div>
@@ -1361,6 +1685,23 @@ DASHBOARD_HTML = """
                     switchTab(tabName);
                 });
             });
+            
+            // Revenue stream management
+            document.getElementById('addRevenueBtn').addEventListener('click', () => {
+                openRevenueModal();
+            });
+            
+            document.getElementById('cancelRevenueForm').addEventListener('click', () => {
+                closeRevenueModal();
+            });
+            
+            document.getElementById('revenueForm').addEventListener('submit', handleRevenueSubmit);
+            
+            document.getElementById('cancelDelete').addEventListener('click', () => {
+                closeDeleteModal();
+            });
+            
+            document.getElementById('confirmDelete').addEventListener('click', confirmDeleteRevenueStream);
         }
         
         async function handleLogin(e) {
@@ -1423,6 +1764,209 @@ DASHBOARD_HTML = """
             });
             
             document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+        }
+        
+        // Revenue Stream Management Functions
+        let currentEditingId = null;
+        let deleteStreamId = null;
+        
+        function openRevenueModal(stream = null) {
+            const modal = document.getElementById('revenueModal');
+            const title = document.getElementById('revenueModalTitle');
+            const form = document.getElementById('revenueForm');
+            
+            if (stream) {
+                // Edit mode
+                title.textContent = 'Edit Revenue Stream';
+                currentEditingId = stream.id;
+                
+                // Populate form fields
+                document.getElementById('streamName').value = stream.name || '';
+                document.getElementById('currentMonth').value = stream.current_month || 0;
+                document.getElementById('targetMonth').value = stream.target_month || 0;
+                document.getElementById('ytd').value = stream.ytd || 0;
+                document.getElementById('targetYtd').value = stream.target_ytd || 0;
+                document.getElementById('growthRate').value = stream.growth_rate || 0;
+                document.getElementById('projection6Month').value = stream.projections?.["6_month"] || 0;
+                document.getElementById('sources').value = Array.isArray(stream.sources) ? stream.sources.join('\n') : '';
+            } else {
+                // Add mode
+                title.textContent = 'Add Revenue Stream';
+                currentEditingId = null;
+                form.reset();
+            }
+            
+            modal.classList.remove('hidden');
+        }
+        
+        function closeRevenueModal() {
+            document.getElementById('revenueModal').classList.add('hidden');
+            document.getElementById('revenueForm').reset();
+            currentEditingId = null;
+        }
+        
+        function openDeleteModal(streamId, streamName) {
+            deleteStreamId = streamId;
+            document.querySelector('#deleteConfirmModal p').textContent = 
+                `Are you sure you want to delete "${streamName}"? This action cannot be undone.`;
+            document.getElementById('deleteConfirmModal').classList.remove('hidden');
+        }
+        
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmModal').classList.add('hidden');
+            deleteStreamId = null;
+        }
+        
+        async function handleRevenueSubmit(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitRevenueForm');
+            const originalText = submitBtn.textContent;
+            
+            try {
+                submitBtn.textContent = 'Saving...';
+                submitBtn.disabled = true;
+                
+                const formData = {
+                    name: document.getElementById('streamName').value.trim(),
+                    current_month: parseFloat(document.getElementById('currentMonth').value) || 0,
+                    target_month: parseFloat(document.getElementById('targetMonth').value) || 0,
+                    ytd: parseFloat(document.getElementById('ytd').value) || 0,
+                    target_ytd: parseFloat(document.getElementById('targetYtd').value) || 0,
+                    growth_rate: parseFloat(document.getElementById('growthRate').value) || 0,
+                    sources: document.getElementById('sources').value.trim() 
+                        ? document.getElementById('sources').value.trim().split('\n').filter(s => s.trim())
+                        : [],
+                    projections: {
+                        "6_month": parseFloat(document.getElementById('projection6Month').value) || 0,
+                        "12_month": parseFloat(document.getElementById('projection6Month').value) * 2 || 0
+                    }
+                };
+                
+                // Validation
+                if (!formData.name) {
+                    throw new Error('Stream name is required');
+                }
+                
+                const headers = { 'Authorization': `Bearer ${authToken}` };
+                let response;
+                
+                if (currentEditingId) {
+                    // Update existing stream
+                    response = await axios.put(`${API_BASE}/api/revenue/${currentEditingId}`, formData, { headers });
+                    showNotification('Revenue stream updated successfully!', 'success');
+                } else {
+                    // Create new stream
+                    response = await axios.post(`${API_BASE}/api/revenue`, formData, { headers });
+                    showNotification('Revenue stream created successfully!', 'success');
+                }
+                
+                closeRevenueModal();
+                await loadRevenueStreams(); // Refresh the list
+                
+            } catch (error) {
+                console.error('Revenue stream save error:', error);
+                const message = error.response?.data?.error || error.message || 'Failed to save revenue stream';
+                showNotification(message, 'error');
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+        
+        async function editRevenueStream(streamId) {
+            try {
+                const headers = { 'Authorization': `Bearer ${authToken}` };
+                const response = await axios.get(`${API_BASE}/api/revenue/${streamId}`, { headers });
+                openRevenueModal(response.data);
+            } catch (error) {
+                console.error('Error fetching revenue stream:', error);
+                showNotification('Failed to load revenue stream data', 'error');
+            }
+        }
+        
+        function deleteRevenueStream(streamId) {
+            // Get the stream name from the button's data attribute
+            const button = event.target.closest('button');
+            const streamName = button.getAttribute('data-stream-name');
+            openDeleteModal(streamId, streamName);
+        }
+        
+        async function confirmDeleteRevenueStream() {
+            if (!deleteStreamId) return;
+            
+            const confirmBtn = document.getElementById('confirmDelete');
+            const originalText = confirmBtn.textContent;
+            
+            try {
+                confirmBtn.textContent = 'Deleting...';
+                confirmBtn.disabled = true;
+                
+                const headers = { 'Authorization': `Bearer ${authToken}` };
+                await axios.delete(`${API_BASE}/api/revenue/${deleteStreamId}`, { headers });
+                
+                showNotification('Revenue stream deleted successfully!', 'success');
+                closeDeleteModal();
+                await loadRevenueStreams(); // Refresh the list
+                
+            } catch (error) {
+                console.error('Delete revenue stream error:', error);
+                const message = error.response?.data?.error || 'Failed to delete revenue stream';
+                showNotification(message, 'error');
+            } finally {
+                confirmBtn.textContent = originalText;
+                confirmBtn.disabled = false;
+            }
+        }
+        
+        async function loadRevenueStreams() {
+            try {
+                const headers = { 'Authorization': `Bearer ${authToken}` };
+                const response = await axios.get(`${API_BASE}/api/revenue`, { headers });
+                updateRevenueStreams(response.data);
+            } catch (error) {
+                console.error('Error loading revenue streams:', error);
+                showNotification('Failed to load revenue streams', 'error');
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full ${
+                type === 'success' ? 'bg-green-500 text-white' :
+                type === 'error' ? 'bg-red-500 text-white' :
+                type === 'warning' ? 'bg-yellow-500 text-white' :
+                'bg-blue-500 text-white'
+            }`;
+            
+            notification.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, 5000);
         }
         
         async function loadDashboardData() {
@@ -1490,17 +2034,53 @@ DASHBOARD_HTML = """
         function updateRevenueStreams(streams) {
             const container = document.getElementById('revenueStreams');
             container.innerHTML = streams.map(stream => `
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-medium text-gray-900">${stream.name}</h4>
-                    <div class="mt-2">
-                        <div class="flex justify-between text-sm">
-                            <span>Current: $${stream.current_month.toLocaleString()}</span>
-                            <span>Target: $${stream.target_month.toLocaleString()}</span>
+                <div class="bg-white border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start mb-3">
+                        <h4 class="font-medium text-gray-900 flex-1">${stream.name}</h4>
+                        <div class="flex space-x-2 ml-2">
+                            <button onclick="editRevenueStream(${stream.id})" class="text-blue-600 hover:text-blue-800 p-1" title="Edit">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                                </svg>
+                            </button>
+                            <button onclick="deleteRevenueStream(${stream.id})" data-stream-name="${stream.name}" class="text-red-600 hover:text-red-800 p-1" title="Delete">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9zM4 5a2 2 0 012-2h8a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zM8 8a1 1 0 012 0v3a1 1 0 11-2 0V8zM12 8a1 1 0 012 0v3a1 1 0 11-2 0V8z" clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
                         </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
-                            <div class="bg-blue-600 h-2 rounded-full" style="width: ${(stream.current_month / stream.target_month) * 100}%"></div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                                <span class="text-gray-600">Current:</span>
+                                <span class="font-semibold text-gray-900">$${stream.current_month.toLocaleString()}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Target:</span>
+                                <span class="font-semibold text-gray-900">$${stream.target_month.toLocaleString()}</span>
+                            </div>
                         </div>
-                        <div class="text-xs text-gray-600 mt-1">Growth: ${stream.growth_rate}%</div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ${Math.min((stream.current_month / stream.target_month) * 100, 100)}%"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="text-gray-600">
+                                YTD: $${stream.ytd.toLocaleString()}
+                            </div>
+                            <div class="text-right ${stream.growth_rate >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                Growth: ${stream.growth_rate}%
+                            </div>
+                        </div>
+                        ${stream.sources && stream.sources.length > 0 ? 
+                            '<div class="pt-2 border-t border-gray-100">' +
+                                '<p class="text-xs text-gray-600 mb-1">Sources:</p>' +
+                                '<div class="text-xs text-gray-700 space-y-1">' +
+                                    stream.sources.slice(0, 2).map(source => '<div>- ' + source + '</div>').join('') +
+                                    (stream.sources.length > 2 ? '<div class="text-gray-500">+ ' + (stream.sources.length - 2) + ' more</div>' : '') +
+                                '</div>' +
+                            '</div>'
+                        : ''}
                     </div>
                 </div>
             `).join('');
@@ -1579,7 +2159,7 @@ def register():
             "token": access_token,
             "user": {
                 "email": email,
-                "name": "Dr. Dédé",
+                "name": "Dr. Dede",
                 "role": "admin"
             }
         })
@@ -1605,7 +2185,7 @@ def login():
             "token": access_token,
             "user": {
                 "email": email,
-                "name": "Dr. Dédé",
+                "name": "Dr. Dede",
                 "role": "admin"
             }
         })
@@ -1648,70 +2228,127 @@ def dashboard_overview():
 @app.route('/api/revenue', methods=['GET'])
 @jwt_required()
 def get_revenue():
-    return jsonify(REVENUE_STREAMS)
+    streams = RevenueStream.query.all()
+    return jsonify(serialize_models(streams))
 
 @app.route('/api/revenue/<int:stream_id>', methods=['GET'])
 @jwt_required()
 def get_revenue_stream(stream_id):
-    stream = next((s for s in REVENUE_STREAMS if s['id'] == stream_id), None)
+    stream = RevenueStream.query.get(stream_id)
     if not stream:
         return jsonify({"error": "Revenue stream not found"}), 404
-    return jsonify(stream)
+    return jsonify(serialize_model(stream))
 
 @app.route('/api/revenue', methods=['POST'])
 @jwt_required()
 def create_revenue_entry():
     try:
         data = request.get_json()
-        new_entry = {
-            "id": len(REVENUE_STREAMS) + 1,
-            "name": data.get('name'),
-            "current_month": data.get('current_month', 0),
-            "target_month": data.get('target_month', 0),
-            "ytd": data.get('ytd', 0),
-            "target_ytd": data.get('target_ytd', 0),
-            "growth_rate": data.get('growth_rate', 0),
-            "last_updated": datetime.now().isoformat()
-        }
-        REVENUE_STREAMS.append(new_entry)
-        return jsonify(new_entry), 201
+        new_stream = RevenueStream(
+            name=data.get('name'),
+            current_month=data.get('current_month', 0),
+            target_month=data.get('target_month', 0),
+            ytd=data.get('ytd', 0),
+            target_ytd=data.get('target_ytd', 0),
+            growth_rate=data.get('growth_rate', 0),
+            sources=data.get('sources', []),
+            projections=data.get('projections', {}),
+            last_updated=datetime.now()
+        )
+        db.session.add(new_stream)
+        db.session.commit()
+        return jsonify(serialize_model(new_stream)), 201
     except Exception as e:
         logger.error(f"Create revenue entry error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to create revenue entry"}), 500
+
+@app.route('/api/revenue/<int:stream_id>', methods=['PUT'])
+@jwt_required()
+def update_revenue_stream(stream_id):
+    try:
+        stream = RevenueStream.query.get(stream_id)
+        if not stream:
+            return jsonify({"error": "Revenue stream not found"}), 404
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('name'):
+            return jsonify({"error": "Name is required"}), 400
+        
+        # Update fields
+        stream.name = data.get('name', stream.name)
+        stream.current_month = float(data.get('current_month', stream.current_month))
+        stream.target_month = float(data.get('target_month', stream.target_month))
+        stream.ytd = float(data.get('ytd', stream.ytd))
+        stream.target_ytd = float(data.get('target_ytd', stream.target_ytd))
+        stream.growth_rate = float(data.get('growth_rate', stream.growth_rate))
+        stream.sources = data.get('sources', stream.sources)
+        stream.projections = data.get('projections', stream.projections)
+        stream.last_updated = datetime.now()
+        
+        db.session.commit()
+        return jsonify(serialize_model(stream))
+    except ValueError as e:
+        logger.error(f"Update revenue stream validation error: {e}")
+        return jsonify({"error": "Invalid numeric values provided"}), 400
+    except Exception as e:
+        logger.error(f"Update revenue stream error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update revenue stream"}), 500
+
+@app.route('/api/revenue/<int:stream_id>', methods=['DELETE'])
+@jwt_required()
+def delete_revenue_stream(stream_id):
+    try:
+        stream = RevenueStream.query.get(stream_id)
+        if not stream:
+            return jsonify({"error": "Revenue stream not found"}), 404
+        
+        db.session.delete(stream)
+        db.session.commit()
+        return jsonify({"message": "Revenue stream deleted successfully"}), 200
+    except Exception as e:
+        logger.error(f"Delete revenue stream error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete revenue stream"}), 500
 
 # KPI routes
 @app.route('/api/kpi', methods=['GET'])
 @jwt_required()
 def get_kpis():
-    return jsonify(KPI_METRICS)
+    kpis = KPIMetric.query.all()
+    return jsonify(serialize_models(kpis))
 
 @app.route('/api/kpi/<int:kpi_id>', methods=['GET'])
 @jwt_required()
 def get_kpi(kpi_id):
-    kpi = next((k for k in KPI_METRICS if k['id'] == kpi_id), None)
+    kpi = KPIMetric.query.get(kpi_id)
     if not kpi:
         return jsonify({"error": "KPI not found"}), 404
-    return jsonify(kpi)
+    return jsonify(serialize_model(kpi))
 
 # AI Agent routes
 @app.route('/api/agents', methods=['GET'])
 @jwt_required()
 def get_agents():
-    return jsonify(AI_AGENTS)
+    agents = AIAgent.query.all()
+    return jsonify(serialize_models(agents))
 
 @app.route('/api/agents/<int:agent_id>', methods=['GET'])
 @jwt_required()
 def get_agent(agent_id):
-    agent = next((a for a in AI_AGENTS if a['id'] == agent_id), None)
+    agent = AIAgent.query.get(agent_id)
     if not agent:
         return jsonify({"error": "Agent not found"}), 404
-    return jsonify(agent)
+    return jsonify(serialize_model(agent))
 
 @app.route('/api/agents/<int:agent_id>/status', methods=['PUT'])
 @jwt_required()
 def update_agent_status(agent_id):
     try:
-        agent = next((a for a in AI_AGENTS if a['id'] == agent_id), None)
+        agent = AIAgent.query.get(agent_id)
         if not agent:
             return jsonify({"error": "Agent not found"}), 404
         
@@ -1721,146 +2358,556 @@ def update_agent_status(agent_id):
         if new_status not in ['active', 'paused', 'stopped']:
             return jsonify({"error": "Invalid status"}), 400
         
-        agent['status'] = new_status
-        agent['last_activity'] = datetime.now().isoformat()
+        agent.status = new_status
+        agent.last_activity = datetime.now()
+        db.session.commit()
         
-        return jsonify(agent)
+        return jsonify(serialize_model(agent))
     except Exception as e:
         logger.error(f"Update agent status error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to update agent status"}), 500
+
+# Comprehensive AI Agent Management API Routes
+@app.route('/api/ai-agents', methods=['GET'])
+def get_ai_agents():
+    """Get all AI agents with optional filtering"""
+    try:
+        query = AIAgent.query
+        
+        # Filter by tier
+        tier = request.args.get('tier')
+        if tier:
+            query = query.filter(AIAgent.tier == tier)
+        
+        # Filter by status
+        status = request.args.get('status')
+        if status:
+            query = query.filter(AIAgent.status == status)
+        
+        # Search by name or function
+        search = request.args.get('search')
+        if search:
+            query = query.filter(
+                db.or_(
+                    AIAgent.name.contains(search),
+                    AIAgent.function.contains(search)
+                )
+            )
+        
+        agents = query.all()
+        return jsonify([agent.to_dict() for agent in agents])
+    except Exception as e:
+        logger.error(f"Get AI agents error: {e}")
+        return jsonify({"error": "Failed to fetch agents"}), 500
+
+@app.route('/api/ai-agents/<int:agent_id>', methods=['GET'])
+def get_ai_agent(agent_id):
+    """Get specific AI agent by ID"""
+    try:
+        agent = AIAgent.query.get(agent_id)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        return jsonify(agent.to_dict())
+    except Exception as e:
+        logger.error(f"Get AI agent error: {e}")
+        return jsonify({"error": "Failed to fetch agent"}), 500
+
+@app.route('/api/ai-agents', methods=['POST'])
+def create_ai_agent():
+    """Create new AI agent"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'tier', 'function']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+        
+        # Create new agent
+        agent = AIAgent(
+            name=data['name'],
+            tier=data['tier'],
+            function=data['function'],
+            tools=data.get('tools', []),
+            status=data.get('status', 'active'),
+            performance=data.get('performance', {}),
+            last_activity=datetime.utcnow(),
+            next_scheduled=datetime.fromisoformat(data['next_scheduled']) if data.get('next_scheduled') else None,
+            additional_data=data.get('additional_data', {})
+        )
+        
+        # Add tier-specific fields to additional_data
+        tier_fields = ['revenue_target', 'weekly_goal', 'pricing', 'output', 'goal', 'strategy', 
+                      'capability', 'licensing', 'revenue', 'targets', 'services', 'capabilities']
+        for field in tier_fields:
+            if data.get(field):
+                if not agent.additional_data:
+                    agent.additional_data = {}
+                agent.additional_data[field] = data[field]
+        
+        db.session.add(agent)
+        db.session.commit()
+        
+        return jsonify(agent.to_dict()), 201
+    except Exception as e:
+        logger.error(f"Create AI agent error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create agent"}), 500
+
+@app.route('/api/ai-agents/<int:agent_id>', methods=['PUT'])
+def update_ai_agent(agent_id):
+    """Update existing AI agent"""
+    try:
+        agent = AIAgent.query.get(agent_id)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        
+        # Update basic fields
+        if 'name' in data:
+            agent.name = data['name']
+        if 'tier' in data:
+            agent.tier = data['tier']
+        if 'function' in data:
+            agent.function = data['function']
+        if 'tools' in data:
+            agent.tools = data['tools']
+        if 'status' in data:
+            agent.status = data['status']
+        if 'performance' in data:
+            agent.performance = data['performance']
+        if 'next_scheduled' in data:
+            agent.next_scheduled = datetime.fromisoformat(data['next_scheduled']) if data['next_scheduled'] else None
+        
+        # Update additional fields
+        tier_fields = ['revenue_target', 'weekly_goal', 'pricing', 'output', 'goal', 'strategy', 
+                      'capability', 'licensing', 'revenue', 'targets', 'services', 'capabilities']
+        for field in tier_fields:
+            if field in data:
+                if not agent.additional_data:
+                    agent.additional_data = {}
+                agent.additional_data[field] = data[field]
+        
+        agent.last_activity = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify(agent.to_dict())
+    except Exception as e:
+        logger.error(f"Update AI agent error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update agent"}), 500
+
+@app.route('/api/ai-agents/<int:agent_id>', methods=['DELETE'])
+def delete_ai_agent(agent_id):
+    """Delete AI agent"""
+    try:
+        agent = AIAgent.query.get(agent_id)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        db.session.delete(agent)
+        db.session.commit()
+        
+        return jsonify({"message": "Agent deleted successfully"})
+    except Exception as e:
+        logger.error(f"Delete AI agent error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete agent"}), 500
+
+@app.route('/api/ai-agents/<int:agent_id>/status', methods=['PUT'])
+def update_ai_agent_status(agent_id):
+    """Update AI agent status"""
+    try:
+        agent = AIAgent.query.get(agent_id)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        valid_statuses = ['active', 'paused', 'inactive', 'development', 'beta']
+        if new_status not in valid_statuses:
+            return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
+        
+        agent.status = new_status
+        agent.last_activity = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify(agent.to_dict())
+    except Exception as e:
+        logger.error(f"Update AI agent status error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update agent status"}), 500
+
+@app.route('/api/ai-agents/<int:agent_id>/performance', methods=['PUT'])
+def update_ai_agent_performance(agent_id):
+    """Update AI agent performance metrics"""
+    try:
+        agent = AIAgent.query.get(agent_id)
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        data = request.get_json()
+        performance_data = data.get('performance', {})
+        
+        if not agent.performance:
+            agent.performance = {}
+        
+        agent.performance.update(performance_data)
+        agent.last_activity = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify(agent.to_dict())
+    except Exception as e:
+        logger.error(f"Update AI agent performance error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update agent performance"}), 500
+
+@app.route('/api/ai-agents/bulk', methods=['POST'])
+def bulk_operations_ai_agents():
+    """Perform bulk operations on AI agents"""
+    try:
+        data = request.get_json()
+        agent_ids = data.get('agent_ids', [])
+        operation = data.get('operation')
+        
+        if not agent_ids:
+            return jsonify({"error": "No agent IDs provided"}), 400
+        
+        agents = AIAgent.query.filter(AIAgent.id.in_(agent_ids)).all()
+        if len(agents) != len(agent_ids):
+            return jsonify({"error": "Some agents not found"}), 404
+        
+        if operation == 'activate':
+            for agent in agents:
+                agent.status = 'active'
+                agent.last_activity = datetime.utcnow()
+        elif operation == 'pause':
+            for agent in agents:
+                agent.status = 'paused'
+                agent.last_activity = datetime.utcnow()
+        elif operation == 'update_status':
+            new_status = data.get('status')
+            valid_statuses = ['active', 'paused', 'inactive', 'development', 'beta']
+            if new_status not in valid_statuses:
+                return jsonify({"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}), 400
+            for agent in agents:
+                agent.status = new_status
+                agent.last_activity = datetime.utcnow()
+        else:
+            return jsonify({"error": "Invalid operation"}), 400
+        
+        db.session.commit()
+        return jsonify({"message": f"Bulk operation '{operation}' completed successfully on {len(agents)} agents"})
+    except Exception as e:
+        logger.error(f"Bulk operations error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to perform bulk operation"}), 500
+
+# Task Management API for AI Agents
+@app.route('/api/tasks', methods=['POST'])
+def create_task():
+    """Create and assign task to AI agent"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['agent_id', 'title']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+        
+        # Verify agent exists
+        agent = AIAgent.query.get(data['agent_id'])
+        if not agent:
+            return jsonify({"error": "Agent not found"}), 404
+        
+        # Create task record (you might want to create a Task model for this)
+        task_data = {
+            "id": datetime.utcnow().timestamp(),
+            "agent_id": data['agent_id'],
+            "title": data['title'],
+            "description": data.get('description', ''),
+            "priority": data.get('priority', 'medium'),
+            "status": 'assigned',
+            "deadline": data.get('deadline'),
+            "notes": data.get('notes', ''),
+            "created_at": datetime.utcnow().isoformat(),
+            "assigned_at": datetime.utcnow().isoformat()
+        }
+        
+        # Update agent's next scheduled time if deadline is provided
+        if data.get('deadline'):
+            agent.next_scheduled = datetime.fromisoformat(data['deadline'])
+            agent.last_activity = datetime.utcnow()
+            db.session.commit()
+        
+        # In a real implementation, you'd store this in a tasks table
+        # For now, we'll just return the task data
+        return jsonify(task_data), 201
+    except Exception as e:
+        logger.error(f"Create task error: {e}")
+        return jsonify({"error": "Failed to create task"}), 500
+
+@app.route('/api/ai-agents/dashboard/stats', methods=['GET'])
+def get_ai_agents_dashboard_stats():
+    """Get dashboard statistics for AI agents"""
+    try:
+        total_agents = AIAgent.query.count()
+        active_agents = AIAgent.query.filter(AIAgent.status == 'active').count()
+        paused_agents = AIAgent.query.filter(AIAgent.status == 'paused').count()
+        
+        # Calculate pipeline value and average performance
+        agents = AIAgent.query.all()
+        total_pipeline = 0
+        performance_sum = 0
+        performance_count = 0
+        
+        for agent in agents:
+            if agent.performance:
+                if agent.performance.get('pipeline_value'):
+                    total_pipeline += agent.performance['pipeline_value']
+                if agent.performance.get('success_rate'):
+                    performance_sum += agent.performance['success_rate']
+                    performance_count += 1
+        
+        avg_performance = (performance_sum / performance_count) if performance_count > 0 else 0
+        
+        return jsonify({
+            "total_agents": total_agents,
+            "active_agents": active_agents,
+            "paused_agents": paused_agents,
+            "total_pipeline": total_pipeline,
+            "avg_performance": round(avg_performance, 1)
+        })
+    except Exception as e:
+        logger.error(f"Get dashboard stats error: {e}")
+        return jsonify({"error": "Failed to fetch dashboard stats"}), 500
 
 # Milestone routes
 @app.route('/api/milestones', methods=['GET'])
 @jwt_required()
 def get_milestones():
-    return jsonify(MILESTONES)
+    milestones = Milestone.query.all()
+    return jsonify(serialize_models(milestones))
 
 @app.route('/api/milestones/<int:milestone_id>', methods=['GET'])
 @jwt_required()
 def get_milestone(milestone_id):
-    milestone = next((m for m in MILESTONES if m['id'] == milestone_id), None)
+    milestone = Milestone.query.get(milestone_id)
     if not milestone:
         return jsonify({"error": "Milestone not found"}), 404
-    return jsonify(milestone)
+    return jsonify(serialize_model(milestone))
 
 # Healthcare Provider routes
 @app.route('/api/healthcare/providers', methods=['GET'])
 @jwt_required()
 def get_healthcare_providers():
-    return jsonify(HEALTHCARE_PROVIDERS)
+    providers = HealthcareProvider.query.all()
+    return jsonify(serialize_models(providers))
 
 @app.route('/api/healthcare/providers/<int:provider_id>', methods=['GET'])
 @jwt_required()
 def get_healthcare_provider(provider_id):
-    provider = next((p for p in HEALTHCARE_PROVIDERS if p['id'] == provider_id), None)
+    provider = HealthcareProvider.query.get(provider_id)
     if not provider:
         return jsonify({"error": "Provider not found"}), 404
-    return jsonify(provider)
+    return jsonify(serialize_model(provider))
 
 @app.route('/api/healthcare/providers', methods=['POST'])
 @jwt_required()
 def create_healthcare_provider():
     try:
         data = request.get_json()
-        new_provider = {
-            "id": len(HEALTHCARE_PROVIDERS) + 1,
-            "name": data.get('name'),
-            "specialty": data.get('specialty'),
-            "phone": data.get('phone'),
-            "rating": data.get('rating', 0),
-            "insurance_accepted": data.get('insurance_accepted', []),
-            "next_available": data.get('next_available'),
-            "address": data.get('address'),
-            "notes": data.get('notes', '')
-        }
-        HEALTHCARE_PROVIDERS.append(new_provider)
-        return jsonify(new_provider), 201
+        new_provider = HealthcareProvider(
+            name=data.get('name'),
+            specialty=data.get('specialty'),
+            phone=data.get('phone'),
+            rating=data.get('rating', 0.0),
+            insurance_accepted=data.get('insurance_accepted', []),
+            next_available=data.get('next_available'),
+            address=data.get('address'),
+            notes=data.get('notes', '')
+        )
+        db.session.add(new_provider)
+        db.session.commit()
+        return jsonify(serialize_model(new_provider)), 201
     except Exception as e:
         logger.error(f"Create healthcare provider error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to create healthcare provider"}), 500
 
 # Healthcare Appointment routes
 @app.route('/api/healthcare/appointments', methods=['GET'])
 @jwt_required()
 def get_healthcare_appointments():
-    return jsonify(HEALTHCARE_APPOINTMENTS)
+    appointments = HealthcareAppointment.query.all()
+    return jsonify(serialize_models(appointments))
 
 @app.route('/api/healthcare/appointments/<int:appointment_id>', methods=['GET'])
 @jwt_required()
 def get_healthcare_appointment(appointment_id):
-    appointment = next((a for a in HEALTHCARE_APPOINTMENTS if a['id'] == appointment_id), None)
+    appointment = HealthcareAppointment.query.get(appointment_id)
     if not appointment:
         return jsonify({"error": "Appointment not found"}), 404
-    return jsonify(appointment)
+    return jsonify(serialize_model(appointment))
 
 @app.route('/api/healthcare/appointments', methods=['POST'])
 @jwt_required()
 def create_healthcare_appointment():
     try:
         data = request.get_json()
-        new_appointment = {
-            "id": len(HEALTHCARE_APPOINTMENTS) + 1,
-            "provider": data.get('provider'),
-            "date": data.get('date'),
-            "time": data.get('time'),
-            "purpose": data.get('purpose'),
-            "status": data.get('status', 'scheduled'),
-            "notes": data.get('notes', '')
-        }
-        HEALTHCARE_APPOINTMENTS.append(new_appointment)
-        return jsonify(new_appointment), 201
+        new_appointment = HealthcareAppointment(
+            provider=data.get('provider'),
+            date=data.get('date'),
+            time=data.get('time'),
+            purpose=data.get('purpose'),
+            status=data.get('status', 'scheduled'),
+            notes=data.get('notes', '')
+        )
+        db.session.add(new_appointment)
+        db.session.commit()
+        return jsonify(serialize_model(new_appointment)), 201
     except Exception as e:
         logger.error(f"Create healthcare appointment error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to create healthcare appointment"}), 500
 
 @app.route('/api/healthcare/appointments/<int:appointment_id>', methods=['PUT'])
 @jwt_required()
 def update_healthcare_appointment(appointment_id):
     try:
-        appointment = next((a for a in HEALTHCARE_APPOINTMENTS if a['id'] == appointment_id), None)
+        appointment = HealthcareAppointment.query.get(appointment_id)
         if not appointment:
             return jsonify({"error": "Appointment not found"}), 404
         
         data = request.get_json()
-        appointment.update({
-            "provider": data.get('provider', appointment['provider']),
-            "date": data.get('date', appointment['date']),
-            "time": data.get('time', appointment['time']),
-            "purpose": data.get('purpose', appointment['purpose']),
-            "status": data.get('status', appointment['status']),
-            "notes": data.get('notes', appointment['notes'])
-        })
+        appointment.provider = data.get('provider', appointment.provider)
+        appointment.date = data.get('date', appointment.date)
+        appointment.time = data.get('time', appointment.time)
+        appointment.purpose = data.get('purpose', appointment.purpose)
+        appointment.status = data.get('status', appointment.status)
+        appointment.notes = data.get('notes', appointment.notes)
         
-        return jsonify(appointment)
+        db.session.commit()
+        return jsonify(serialize_model(appointment))
     except Exception as e:
         logger.error(f"Update healthcare appointment error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to update healthcare appointment"}), 500
+
+# Healthcare Provider DELETE route
+@app.route('/api/healthcare/providers/<int:provider_id>', methods=['DELETE'])
+@jwt_required()
+def delete_healthcare_provider(provider_id):
+    try:
+        provider = HealthcareProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({"error": "Provider not found"}), 404
+        
+        db.session.delete(provider)
+        db.session.commit()
+        return jsonify({"message": "Provider deleted successfully"})
+    except Exception as e:
+        logger.error(f"Delete healthcare provider error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete healthcare provider"}), 500
+
+# Healthcare Provider UPDATE route
+@app.route('/api/healthcare/providers/<int:provider_id>', methods=['PUT'])
+@jwt_required()
+def update_healthcare_provider(provider_id):
+    try:
+        provider = HealthcareProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({"error": "Provider not found"}), 404
+        
+        data = request.get_json()
+        provider.name = data.get('name', provider.name)
+        provider.specialty = data.get('specialty', provider.specialty)
+        provider.phone = data.get('phone', provider.phone)
+        provider.rating = data.get('rating', provider.rating)
+        provider.insurance_accepted = data.get('insurance_accepted', provider.insurance_accepted)
+        provider.next_available = data.get('next_available', provider.next_available)
+        provider.address = data.get('address', provider.address)
+        provider.notes = data.get('notes', provider.notes)
+        
+        db.session.commit()
+        return jsonify(serialize_model(provider))
+    except Exception as e:
+        logger.error(f"Update healthcare provider error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update healthcare provider"}), 500
+
+# Healthcare Appointment DELETE route
+@app.route('/api/healthcare/appointments/<int:appointment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_healthcare_appointment(appointment_id):
+    try:
+        appointment = HealthcareAppointment.query.get(appointment_id)
+        if not appointment:
+            return jsonify({"error": "Appointment not found"}), 404
+        
+        db.session.delete(appointment)
+        db.session.commit()
+        return jsonify({"message": "Appointment deleted successfully"})
+    except Exception as e:
+        logger.error(f"Delete healthcare appointment error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete healthcare appointment"}), 500
 
 # Health Metrics routes
 @app.route('/api/healthcare/metrics', methods=['GET'])
-@jwt_required()
 def get_health_metrics():
-    return jsonify(HEALTH_METRICS)
+    metrics = HealthMetric.query.all()
+    return jsonify(serialize_models(metrics))
 
 @app.route('/api/healthcare/metrics', methods=['POST'])
 @jwt_required()
 def create_health_metric():
     try:
         data = request.get_json()
-        new_metric = {
-            "id": len(HEALTH_METRICS) + 1,
-            "metric": data.get('metric'),
-            "value": data.get('value'),
-            "unit": data.get('unit'),
-            "date": data.get('date', datetime.now().isoformat()),
-            "status": data.get('status', 'normal'),
-            "target": data.get('target', '')
-        }
-        HEALTH_METRICS.append(new_metric)
-        return jsonify(new_metric), 201
+        # Handle date conversion
+        metric_date = data.get('date')
+        if isinstance(metric_date, str):
+            metric_date = datetime.fromisoformat(metric_date)
+        elif metric_date is None:
+            metric_date = datetime.now()
+        
+        new_metric = HealthMetric(
+            metric=data.get('metric'),
+            value=str(data.get('value')),  # Convert to string for storage
+            unit=data.get('unit'),
+            date=metric_date,
+            status=data.get('status', 'normal'),
+            target=data.get('target', '')
+        )
+        db.session.add(new_metric)
+        db.session.commit()
+        return jsonify(serialize_model(new_metric)), 201
     except Exception as e:
         logger.error(f"Create health metric error: {e}")
+        db.session.rollback()
         return jsonify({"error": "Failed to create health metric"}), 500
+
+# Health Metrics DELETE route
+@app.route('/api/healthcare/metrics/<int:metric_id>', methods=['DELETE'])
+def delete_health_metric(metric_id):
+    try:
+        metric = HealthMetric.query.get(metric_id)
+        if not metric:
+            return jsonify({"error": "Metric not found"}), 404
+        
+        db.session.delete(metric)
+        db.session.commit()
+        return jsonify({"message": "Health metric deleted successfully"})
+    except Exception as e:
+        logger.error(f"Delete health metric error: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete health metric"}), 500
 
 # AI Empire Agent Management routes
 @app.route('/api/empire/agents', methods=['GET'])
@@ -1921,7 +2968,8 @@ def get_agents_by_tier(tier):
 @app.route('/api/wellness/energy', methods=['GET'])
 @jwt_required()
 def get_energy_tracking():
-    return jsonify(HEALTH_WELLNESS['energy_tracking'])
+    energy_data = EnergyTracking.query.all()
+    return jsonify(serialize_models(energy_data))
 
 @app.route('/api/wellness/energy', methods=['POST'])
 @jwt_required()
@@ -1947,12 +2995,14 @@ def add_energy_entry():
 @app.route('/api/wellness/goals', methods=['GET'])
 @jwt_required()
 def get_wellness_goals():
-    return jsonify(HEALTH_WELLNESS['wellness_goals'])
+    goals = WellnessGoal.query.all()
+    return jsonify(serialize_models(goals))
 
 @app.route('/api/wellness/alerts', methods=['GET'])
 @jwt_required()
 def get_wellness_alerts():
-    return jsonify(HEALTH_WELLNESS['alerts'])
+    alerts = WellnessAlert.query.all()
+    return jsonify(serialize_models(alerts))
 
 @app.route('/api/wellness/overview', methods=['GET'])
 @jwt_required()
@@ -1963,15 +3013,16 @@ def get_wellness_overview():
 @app.route('/api/executive/opportunities', methods=['GET'])
 @jwt_required()
 def get_executive_opportunities():
-    return jsonify(EXECUTIVE_OPPORTUNITIES)
+    opportunities = ExecutiveOpportunity.query.all()
+    return jsonify(serialize_models(opportunities))
 
 @app.route('/api/executive/opportunities/<int:opp_id>', methods=['GET'])
 @jwt_required()
 def get_executive_opportunity(opp_id):
-    opp = next((o for o in EXECUTIVE_OPPORTUNITIES if o['id'] == opp_id), None)
+    opp = ExecutiveOpportunity.query.get(opp_id)
     if not opp:
         return jsonify({"error": "Opportunity not found"}), 404
-    return jsonify(opp)
+    return jsonify(serialize_model(opp))
 
 @app.route('/api/executive/opportunities', methods=['POST'])
 @jwt_required()
@@ -2336,6 +3387,18 @@ def get_empire_dashboard():
         "last_updated": datetime.now().isoformat()
     })
 
+# Frontend Routes
+@app.route('/ai-agents')
+def ai_agents_page():
+    """Serve the AI Agent Management interface"""
+    return render_template('ai_agents.html')
+
+@app.route('/healthcare')
+def healthcare_page():
+    """Serve the Healthcare Management interface"""
+    return render_template('healthcare.html')
+
+
 # Health check endpoint
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -2354,6 +3417,10 @@ def health_check():
             "frontend_integrated"
         ]
     })
+
+# Initialize database on startup
+with app.app_context():
+    create_and_seed_database()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
