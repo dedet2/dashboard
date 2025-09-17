@@ -16,7 +16,7 @@ from enum import Enum
 import json
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MimeMultipart
+from email.mime.multipart import MIMEMultipart
 
 from airtable_sync_service import (
     AirtableSyncService, SyncConfiguration, SyncDirection, ConflictStrategy,
@@ -515,7 +515,7 @@ class AirtableSyncScheduler:
         """Send email notification about job completion"""
         try:
             # Create message
-            msg = MimeMultipart()
+            msg = MIMEMultipart()
             msg['From'] = self.notification_config['email_username']
             msg['To'] = ', '.join(self.notification_config['email_recipients'])
             
