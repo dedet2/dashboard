@@ -417,3 +417,368 @@ class WellnessAlert(db.Model):
             'active': self.active,
             'created_at': self.created_at.isoformat()
         }
+
+
+# ========================================
+# Perplexity AI Integration Database Models
+# ========================================
+
+class PerplexityResearchResult(db.Model):
+    __tablename__ = 'perplexity_research_results'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    research_type: Mapped[str] = mapped_column(String(100), nullable=False)  # market, company, industry, executive, competitive
+    query: Mapped[str] = mapped_column(Text, nullable=False)  # The research query/prompt
+    subject: Mapped[str] = mapped_column(String(300), nullable=False)  # Company name, industry, person name, etc.
+    model_used: Mapped[str] = mapped_column(String(50), nullable=False)  # small, large, huge
+    
+    # Research results
+    analysis: Mapped[str] = mapped_column(Text, nullable=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=True)
+    key_findings: Mapped[list] = mapped_column(JSON, nullable=True)
+    recommendations: Mapped[list] = mapped_column(JSON, nullable=True)
+    risk_factors: Mapped[list] = mapped_column(JSON, nullable=True)
+    opportunities: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Metadata
+    recency_used: Mapped[str] = mapped_column(String(20), nullable=True)  # hour, day, week, month, year
+    sources_count: Mapped[int] = mapped_column(Integer, nullable=True)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=True)
+    execution_time_ms: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # Raw data storage
+    raw_response: Mapped[dict] = mapped_column(JSON, nullable=True)
+    
+    # Status and timestamps
+    status: Mapped[str] = mapped_column(String(50), default='completed')  # pending, completed, failed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)  # For cache management
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'research_type': self.research_type,
+            'query': self.query,
+            'subject': self.subject,
+            'model_used': self.model_used,
+            'analysis': self.analysis,
+            'summary': self.summary,
+            'key_findings': self.key_findings,
+            'recommendations': self.recommendations,
+            'risk_factors': self.risk_factors,
+            'opportunities': self.opportunities,
+            'recency_used': self.recency_used,
+            'sources_count': self.sources_count,
+            'confidence_score': self.confidence_score,
+            'execution_time_ms': self.execution_time_ms,
+            'status': self.status,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None
+        }
+
+
+class PerplexityInsight(db.Model):
+    __tablename__ = 'perplexity_insights'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    insight_type: Mapped[str] = mapped_column(String(100), nullable=False)  # governance, market_trend, risk_signal, opportunity
+    category: Mapped[str] = mapped_column(String(100), nullable=False)  # industry, company, executive, market
+    
+    # Core insight data
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    impact_level: Mapped[str] = mapped_column(String(20), nullable=False)  # low, medium, high, critical
+    relevance_score: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    # Context and associations
+    related_subject: Mapped[str] = mapped_column(String(300), nullable=True)  # Company/person name
+    industry: Mapped[str] = mapped_column(String(100), nullable=True)
+    tags: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Supporting data
+    evidence: Mapped[list] = mapped_column(JSON, nullable=True)
+    related_research_ids: Mapped[list] = mapped_column(JSON, nullable=True)  # References to research results
+    
+    # AI metadata
+    generated_by_model: Mapped[str] = mapped_column(String(50), nullable=False)
+    confidence_level: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    # Status and timestamps
+    status: Mapped[str] = mapped_column(String(50), default='active')  # active, archived, outdated
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_validated: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'insight_type': self.insight_type,
+            'category': self.category,
+            'title': self.title,
+            'description': self.description,
+            'impact_level': self.impact_level,
+            'relevance_score': self.relevance_score,
+            'related_subject': self.related_subject,
+            'industry': self.industry,
+            'tags': self.tags,
+            'evidence': self.evidence,
+            'related_research_ids': self.related_research_ids,
+            'generated_by_model': self.generated_by_model,
+            'confidence_level': self.confidence_level,
+            'status': self.status,
+            'created_at': self.created_at.isoformat(),
+            'last_validated': self.last_validated.isoformat() if self.last_validated else None
+        }
+
+
+class ProspectScoringResult(db.Model):
+    __tablename__ = 'prospect_scoring_results'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Prospect information
+    prospect_id: Mapped[str] = mapped_column(String(200), nullable=False)  # Apollo prospect ID or similar
+    prospect_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    company_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    company_domain: Mapped[str] = mapped_column(String(200), nullable=True)
+    prospect_title: Mapped[str] = mapped_column(String(300), nullable=True)
+    opportunity_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    
+    # Scoring results
+    final_score: Mapped[float] = mapped_column(Float, nullable=False)
+    component_scores: Mapped[dict] = mapped_column(JSON, nullable=False)  # Individual component scores
+    
+    # Enhanced analysis results
+    research_insights: Mapped[dict] = mapped_column(JSON, nullable=True)  # Company, role, market, opportunity insights
+    content_briefs: Mapped[dict] = mapped_column(JSON, nullable=True)  # Generated content briefs
+    analysis_summary: Mapped[str] = mapped_column(Text, nullable=True)
+    recommendations: Mapped[list] = mapped_column(JSON, nullable=True)
+    risk_factors: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # AI metadata
+    enhanced_analysis: Mapped[bool] = mapped_column(Boolean, default=False)  # Whether Perplexity enhancement was used
+    models_used: Mapped[list] = mapped_column(JSON, nullable=True)  # List of AI models used
+    execution_time_ms: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # Related research references
+    related_research_ids: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Status and timestamps
+    status: Mapped[str] = mapped_column(String(50), default='completed')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'prospect_id': self.prospect_id,
+            'prospect_name': self.prospect_name,
+            'company_name': self.company_name,
+            'company_domain': self.company_domain,
+            'prospect_title': self.prospect_title,
+            'opportunity_type': self.opportunity_type,
+            'final_score': self.final_score,
+            'component_scores': self.component_scores,
+            'research_insights': self.research_insights,
+            'content_briefs': self.content_briefs,
+            'analysis_summary': self.analysis_summary,
+            'recommendations': self.recommendations,
+            'risk_factors': self.risk_factors,
+            'enhanced_analysis': self.enhanced_analysis,
+            'models_used': self.models_used,
+            'execution_time_ms': self.execution_time_ms,
+            'related_research_ids': self.related_research_ids,
+            'status': self.status,
+            'created_at': self.created_at.isoformat(),
+            'last_updated': self.last_updated.isoformat()
+        }
+
+
+class ContentBrief(db.Model):
+    __tablename__ = 'content_briefs'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Content metadata
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)  # executive_summary, market_report, opportunity_brief, industry_insight
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    target_audience: Mapped[str] = mapped_column(String(300), nullable=True)
+    
+    # Content data
+    executive_summary: Mapped[str] = mapped_column(Text, nullable=True)
+    key_points: Mapped[list] = mapped_column(JSON, nullable=True)
+    recommendations: Mapped[list] = mapped_column(JSON, nullable=True)
+    call_to_action: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Full content
+    full_content: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Context and associations
+    related_subject: Mapped[str] = mapped_column(String(300), nullable=True)  # Company/prospect name
+    opportunity_context: Mapped[str] = mapped_column(String(200), nullable=True)
+    industry: Mapped[str] = mapped_column(String(100), nullable=True)
+    
+    # Source references
+    source_research_ids: Mapped[list] = mapped_column(JSON, nullable=True)  # Related research results
+    prospect_scoring_id: Mapped[int] = mapped_column(Integer, nullable=True)  # Related scoring result
+    
+    # AI generation metadata
+    generated_by_model: Mapped[str] = mapped_column(String(50), nullable=False)
+    generation_prompt: Mapped[str] = mapped_column(Text, nullable=True)
+    quality_score: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Usage and engagement
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_viewed: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    # Status and timestamps
+    status: Mapped[str] = mapped_column(String(50), default='draft')  # draft, ready, published, archived
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'content_type': self.content_type,
+            'title': self.title,
+            'target_audience': self.target_audience,
+            'executive_summary': self.executive_summary,
+            'key_points': self.key_points,
+            'recommendations': self.recommendations,
+            'call_to_action': self.call_to_action,
+            'full_content': self.full_content,
+            'related_subject': self.related_subject,
+            'opportunity_context': self.opportunity_context,
+            'industry': self.industry,
+            'source_research_ids': self.source_research_ids,
+            'prospect_scoring_id': self.prospect_scoring_id,
+            'generated_by_model': self.generated_by_model,
+            'generation_prompt': self.generation_prompt,
+            'quality_score': self.quality_score,
+            'view_count': self.view_count,
+            'last_viewed': self.last_viewed.isoformat() if self.last_viewed else None,
+            'status': self.status,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
+
+
+class OpportunityAnalysis(db.Model):
+    __tablename__ = 'opportunity_analyses'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Opportunity context
+    analysis_type: Mapped[str] = mapped_column(String(100), nullable=False)  # governance, speaking, market_entry
+    subject_company: Mapped[str] = mapped_column(String(300), nullable=False)
+    subject_domain: Mapped[str] = mapped_column(String(200), nullable=True)
+    target_context: Mapped[str] = mapped_column(Text, nullable=True)  # Event context, market segment, etc.
+    
+    # Analysis results
+    opportunity_score: Mapped[float] = mapped_column(Float, nullable=False)
+    strategic_fit: Mapped[float] = mapped_column(Float, nullable=True)
+    value_potential: Mapped[float] = mapped_column(Float, nullable=True)
+    execution_feasibility: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Detailed analysis
+    governance_assessment: Mapped[dict] = mapped_column(JSON, nullable=True)
+    market_conditions: Mapped[dict] = mapped_column(JSON, nullable=True)
+    competitive_landscape: Mapped[dict] = mapped_column(JSON, nullable=True)
+    entry_barriers: Mapped[list] = mapped_column(JSON, nullable=True)
+    success_factors: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Recommendations and insights
+    recommended_approach: Mapped[str] = mapped_column(Text, nullable=True)
+    key_stakeholders: Mapped[list] = mapped_column(JSON, nullable=True)
+    timeline_estimate: Mapped[str] = mapped_column(String(100), nullable=True)
+    resource_requirements: Mapped[dict] = mapped_column(JSON, nullable=True)
+    
+    # Risk assessment
+    risk_factors: Mapped[list] = mapped_column(JSON, nullable=True)
+    mitigation_strategies: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # Source references
+    source_research_ids: Mapped[list] = mapped_column(JSON, nullable=True)
+    
+    # AI metadata
+    analyzed_by_model: Mapped[str] = mapped_column(String(50), nullable=False)
+    analysis_prompt: Mapped[str] = mapped_column(Text, nullable=True)
+    confidence_level: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    # Status and timestamps
+    status: Mapped[str] = mapped_column(String(50), default='completed')  # pending, completed, reviewed, archived
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)  # Analysis validity period
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'analysis_type': self.analysis_type,
+            'subject_company': self.subject_company,
+            'subject_domain': self.subject_domain,
+            'target_context': self.target_context,
+            'opportunity_score': self.opportunity_score,
+            'strategic_fit': self.strategic_fit,
+            'value_potential': self.value_potential,
+            'execution_feasibility': self.execution_feasibility,
+            'governance_assessment': self.governance_assessment,
+            'market_conditions': self.market_conditions,
+            'competitive_landscape': self.competitive_landscape,
+            'entry_barriers': self.entry_barriers,
+            'success_factors': self.success_factors,
+            'recommended_approach': self.recommended_approach,
+            'key_stakeholders': self.key_stakeholders,
+            'timeline_estimate': self.timeline_estimate,
+            'resource_requirements': self.resource_requirements,
+            'risk_factors': self.risk_factors,
+            'mitigation_strategies': self.mitigation_strategies,
+            'source_research_ids': self.source_research_ids,
+            'analyzed_by_model': self.analyzed_by_model,
+            'analysis_prompt': self.analysis_prompt,
+            'confidence_level': self.confidence_level,
+            'status': self.status,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None
+        }
+
+
+class PerplexityAPIUsage(db.Model):
+    __tablename__ = 'perplexity_api_usage'
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    
+    # Request metadata
+    endpoint_used: Mapped[str] = mapped_column(String(200), nullable=False)
+    model_used: Mapped[str] = mapped_column(String(50), nullable=False)
+    request_type: Mapped[str] = mapped_column(String(100), nullable=False)  # research, content_generation, scoring
+    
+    # Usage metrics
+    tokens_used: Mapped[int] = mapped_column(Integer, nullable=True)
+    response_time_ms: Mapped[int] = mapped_column(Integer, nullable=True)
+    success: Mapped[bool] = mapped_column(Boolean, default=True)
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Cost tracking
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Request context
+    user_context: Mapped[str] = mapped_column(String(300), nullable=True)  # User session or context
+    related_prospect_id: Mapped[str] = mapped_column(String(200), nullable=True)
+    
+    # Timestamp
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'endpoint_used': self.endpoint_used,
+            'model_used': self.model_used,
+            'request_type': self.request_type,
+            'tokens_used': self.tokens_used,
+            'response_time_ms': self.response_time_ms,
+            'success': self.success,
+            'error_message': self.error_message,
+            'estimated_cost_usd': self.estimated_cost_usd,
+            'user_context': self.user_context,
+            'related_prospect_id': self.related_prospect_id,
+            'created_at': self.created_at.isoformat()
+        }

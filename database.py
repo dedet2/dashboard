@@ -191,6 +191,19 @@ class ExecutiveOpportunity(db.Model):
     conversion_probability: Mapped[float] = mapped_column(Float, default=0.5)
     estimated_close_date: Mapped[str] = mapped_column(String(20), nullable=True)
     
+    # Apollo.io integration fields
+    apollo_prospect_id: Mapped[str] = mapped_column(String(100), nullable=True)  # Apollo's unique prospect ID
+    apollo_organization_id: Mapped[str] = mapped_column(String(100), nullable=True)  # Apollo's organization ID
+    apollo_email: Mapped[str] = mapped_column(String(200), nullable=True)  # Email from Apollo
+    apollo_email_status: Mapped[str] = mapped_column(String(50), nullable=True)  # verified, unverified, likely_to_engage, unavailable
+    apollo_phone_number: Mapped[str] = mapped_column(String(50), nullable=True)  # Phone number from Apollo
+    apollo_linkedin_url: Mapped[str] = mapped_column(String(500), nullable=True)  # LinkedIn profile URL
+    apollo_seniority: Mapped[str] = mapped_column(String(50), nullable=True)  # Seniority level from Apollo
+    apollo_last_enriched: Mapped[datetime] = mapped_column(DateTime, nullable=True)  # When data was last enriched
+    apollo_match_criteria: Mapped[dict] = mapped_column(JSON, nullable=True)  # Search criteria that matched this prospect
+    apollo_company_data: Mapped[dict] = mapped_column(JSON, nullable=True)  # Enriched company information from Apollo
+    apollo_raw_data: Mapped[dict] = mapped_column(JSON, nullable=True)  # Full Apollo API response for reference
+    
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -227,6 +240,17 @@ class ExecutiveOpportunity(db.Model):
             'source': self.source,
             'conversion_probability': self.conversion_probability,
             'estimated_close_date': self.estimated_close_date,
+            'apollo_prospect_id': self.apollo_prospect_id,
+            'apollo_organization_id': self.apollo_organization_id,
+            'apollo_email': self.apollo_email,
+            'apollo_email_status': self.apollo_email_status,
+            'apollo_phone_number': self.apollo_phone_number,
+            'apollo_linkedin_url': self.apollo_linkedin_url,
+            'apollo_seniority': self.apollo_seniority,
+            'apollo_last_enriched': self.apollo_last_enriched.isoformat() if self.apollo_last_enriched else None,
+            'apollo_match_criteria': self.apollo_match_criteria or {},
+            'apollo_company_data': self.apollo_company_data or {},
+            'apollo_raw_data': self.apollo_raw_data or {},
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

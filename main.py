@@ -15,6 +15,29 @@ from dotenv import load_dotenv
 from sqlalchemy import func, desc
 from database import db, RevenueStream, AIAgent, HealthcareProvider, HealthcareAppointment, HealthMetric, ExecutiveOpportunity, SpeakingOpportunity, InterviewStage, CompensationBenchmark, RetreatEvent, KPIMetric, Milestone, EnergyTracking, WellnessGoal, WellnessAlert, WellnessMetric, WorkflowTrigger, BusinessRule, WorkflowAction, WorkflowSchedule, WorkflowExecution, NotificationChannel, WorkflowWebhook, BusinessEvent
 
+# Import Make.com integration components
+try:
+    from make_models import MakeScenario, MakeExecution, MakeEventLog, MakeAutomationBridge, MakeTemplate
+    from make_api_routes import make_bp
+    from make_automation_bridges import (
+        create_automation_bridge_service, 
+        handle_opportunity_created,
+        handle_agent_performance_alert,
+        handle_revenue_milestone,
+        handle_research_complete
+    )
+    make_integration_loaded = True
+except ImportError as e:
+    make_integration_loaded = False
+    make_integration_error = str(e)
+    # Set placeholder functions for fallback
+    make_bp = None
+    create_automation_bridge_service = None
+    handle_opportunity_created = None
+    handle_agent_performance_alert = None
+    handle_revenue_milestone = None
+    handle_research_complete = None
+
 # Load environment variables
 load_dotenv()
 
@@ -22,10 +45,57 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Log Make.com integration status
+try:
+    if make_integration_loaded:
+        logger.info("Make.com integration modules loaded successfully")
+    else:
+        logger.warning(f"Make.com integration modules not available: {make_integration_error}")
+except NameError:
+    # make_integration_loaded variables not defined, Make.com integration not attempted
+    pass
+
 # API Configuration
 APOLLO_API_KEY = os.getenv('APOLLO_API_KEY')
 AIRTABLE_API_KEY = os.getenv('AIRTABLE_API_KEY') 
 PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
+
+# Import Airtable integration components
+try:
+    from airtable_integration import create_airtable_client, AirtableAPIError
+    from airtable_sync_service import (
+        create_sync_service, SyncConfiguration, SyncDirection, ConflictStrategy
+    )
+    from airtable_base_manager import create_base_manager
+    from airtable_sync_scheduler import get_scheduler
+    from airtable_realtime_updates import get_realtime_handler, RealtimeEvent, EventType, WebhookConfig
+    logger.info("Airtable integration modules loaded successfully")
+except ImportError as e:
+    logger.warning(f"Airtable integration modules not available: {e}")
+    # Set placeholder functions
+    create_airtable_client = None
+    create_sync_service = None
+    create_base_manager = None
+    get_scheduler = None
+    get_realtime_handler = None
+
+# Import Perplexity AI integration services
+try:
+    from perplexity_service import (
+        PerplexityAPI, PerplexityModel, SearchRecency,
+        PerplexityResearchService, PerplexityContentService, PerplexityOpportunityAnalyzer,
+        create_perplexity_api, create_research_service, create_content_service, create_opportunity_analyzer
+    )
+    from ai_scoring_service import AIOpportunityScorer, create_ai_scorer
+    logger.info("Perplexity AI integration modules loaded successfully")
+except ImportError as e:
+    logger.warning(f"Perplexity AI integration modules not available: {e}")
+    # Set placeholder functions for fallback
+    create_perplexity_api = None
+    create_research_service = None
+    create_content_service = None
+    create_opportunity_analyzer = None
+    create_ai_scorer = None
 
 # API Base URLs
 APOLLO_BASE_URL = "https://api.apollo.io/v1"
@@ -313,6 +383,26 @@ def user_identity_lookup(user):
 def user_lookup_callback(_jwt_header, jwt_data):
     identity = jwt_data["sub"]
     return {"id": identity, "email": "dede@risktravel.com"}
+
+# Register API blueprints
+if make_bp:
+    app.register_blueprint(make_bp)
+    logger.info("Make.com API blueprint registered successfully")
+else:
+    logger.warning("Make.com integration not available - API routes not registered")
+
+# Initialize Make.com integration (deferred to after app setup)
+def initialize_make_bridges():
+    """Initialize Make.com automation bridges within app context"""
+    if create_automation_bridge_service:
+        try:
+            with app.app_context():
+                bridge_service = create_automation_bridge_service()
+                # Create default bridges
+                bridge_service.create_default_bridges()
+                logger.info("Make.com automation bridges initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Make.com bridges: {e}")
 
 # AI Empire Data Structures
 
@@ -2945,6 +3035,12 @@ def workflow_dashboard():
     """Serve the Workflow Automation Dashboard"""
     return render_template('workflow_dashboard.html')
 
+@app.route('/make')
+@app.route('/make/')
+def make_dashboard():
+    """Serve the Make.com Workflow Automation Dashboard"""
+    return render_template('make_dashboard.html')
+
 @app.route('/api/dashboard/overview', methods=['GET'])
 @jwt_required()
 def dashboard_overview():
@@ -3567,6 +3663,631 @@ def get_ai_agents_dashboard_stats():
     except Exception as e:
         logger.error(f"Get dashboard stats error: {e}")
         return jsonify({"error": "Failed to fetch dashboard stats"}), 500
+
+# ========================================
+# Perplexity AI Integration API Routes
+# ========================================
+
+# Initialize Perplexity services
+perplexity_api = None
+research_service = None
+content_service = None
+opportunity_analyzer = None
+ai_scorer = None
+
+def get_perplexity_services():
+    """Initialize and return Perplexity services"""
+    global perplexity_api, research_service, content_service, opportunity_analyzer, ai_scorer
+    
+    if not PERPLEXITY_API_KEY:
+        return None, None, None, None, None
+    
+    if not perplexity_api:
+        try:
+            if create_perplexity_api:
+                perplexity_api = create_perplexity_api()
+            if create_research_service:
+                research_service = create_research_service()
+            if create_content_service:
+                content_service = create_content_service()
+            if create_opportunity_analyzer:
+                opportunity_analyzer = create_opportunity_analyzer()
+            if create_ai_scorer:
+                ai_scorer = create_ai_scorer()
+        except Exception as e:
+            logger.error(f"Failed to initialize Perplexity services: {e}")
+            return None, None, None, None, None
+    
+    return perplexity_api, research_service, content_service, opportunity_analyzer, ai_scorer
+
+# Simple Query Endpoint
+@app.route('/api/perplexity/query', methods=['POST'])
+@jwt_required()
+def perplexity_simple_query():
+    """Send a simple query to Perplexity AI"""
+    try:
+        api, _, _, _, _ = get_perplexity_services()
+        if not api:
+            return jsonify({"error": "Perplexity API not available"}), 503
+        
+        data = request.get_json()
+        prompt = data.get('prompt')
+        if not prompt:
+            return jsonify({"error": "Prompt is required"}), 400
+        
+        # Optional parameters
+        model = data.get('model', 'small')  # small, large, or huge
+        temperature = data.get('temperature', 0.2)
+        max_tokens = data.get('max_tokens', 800)
+        
+        # Map model names
+        model_map = {
+            'small': PerplexityModel.SMALL,
+            'large': PerplexityModel.LARGE,
+            'huge': PerplexityModel.HUGE
+        }
+        
+        response = api.simple_query(
+            prompt=prompt,
+            model=model_map.get(model, PerplexityModel.SMALL),
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        if response:
+            return jsonify({
+                "response": response,
+                "prompt": prompt,
+                "model": model,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        else:
+            return jsonify({"error": "Failed to get response from Perplexity API"}), 500
+            
+    except Exception as e:
+        logger.error(f"Perplexity simple query error: {e}")
+        return jsonify({"error": "Failed to process query"}), 500
+
+# Market Analysis Endpoint
+@app.route('/api/perplexity/research/market', methods=['POST'])
+@jwt_required()
+def perplexity_market_analysis():
+    """Conduct comprehensive market analysis"""
+    try:
+        _, research_service_instance, _, _, _ = get_perplexity_services()
+        if not research_service_instance:
+            return jsonify({"error": "Perplexity research service not available"}), 503
+        
+        data = request.get_json()
+        topic = data.get('topic')
+        if not topic:
+            return jsonify({"error": "Topic is required"}), 400
+        
+        # Optional parameters
+        recency = data.get('recency', 'month')  # hour, day, week, month, year
+        recency_map = {
+            'hour': SearchRecency.HOUR,
+            'day': SearchRecency.DAY,
+            'week': SearchRecency.WEEK,
+            'month': SearchRecency.MONTH,
+            'year': SearchRecency.YEAR
+        }
+        
+        result = research_service_instance.conduct_market_analysis(
+            topic=topic,
+            recency=recency_map.get(recency, SearchRecency.MONTH)
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "analysis": result
+            })
+        else:
+            return jsonify({"error": "Failed to conduct market analysis"}), 500
+            
+    except Exception as e:
+        logger.error(f"Market analysis error: {e}")
+        return jsonify({"error": "Failed to conduct market analysis"}), 500
+
+# Company Research Endpoint
+@app.route('/api/perplexity/research/company', methods=['POST'])
+@jwt_required()
+def perplexity_company_research():
+    """Research a specific company"""
+    try:
+        _, research_service_instance, _, _, _ = get_perplexity_services()
+        if not research_service_instance:
+            return jsonify({"error": "Perplexity research service not available"}), 503
+        
+        data = request.get_json()
+        company_name = data.get('company_name')
+        if not company_name:
+            return jsonify({"error": "Company name is required"}), 400
+        
+        company_domain = data.get('company_domain')
+        recency = data.get('recency', 'week')
+        
+        recency_map = {
+            'hour': SearchRecency.HOUR,
+            'day': SearchRecency.DAY,
+            'week': SearchRecency.WEEK,
+            'month': SearchRecency.MONTH,
+            'year': SearchRecency.YEAR
+        }
+        
+        result = research_service_instance.research_company(
+            company_name=company_name,
+            company_domain=company_domain,
+            recency=recency_map.get(recency, SearchRecency.WEEK)
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "research": result
+            })
+        else:
+            return jsonify({"error": "Failed to research company"}), 500
+            
+    except Exception as e:
+        logger.error(f"Company research error: {e}")
+        return jsonify({"error": "Failed to research company"}), 500
+
+# Industry Analysis Endpoint
+@app.route('/api/perplexity/research/industry', methods=['POST'])
+@jwt_required()
+def perplexity_industry_analysis():
+    """Analyze an industry sector"""
+    try:
+        _, research_service_instance, _, _, _ = get_perplexity_services()
+        if not research_service_instance:
+            return jsonify({"error": "Perplexity research service not available"}), 503
+        
+        data = request.get_json()
+        industry = data.get('industry')
+        if not industry:
+            return jsonify({"error": "Industry is required"}), 400
+        
+        focus_areas = data.get('focus_areas', [])
+        recency = data.get('recency', 'month')
+        
+        recency_map = {
+            'hour': SearchRecency.HOUR,
+            'day': SearchRecency.DAY,
+            'week': SearchRecency.WEEK,
+            'month': SearchRecency.MONTH,
+            'year': SearchRecency.YEAR
+        }
+        
+        result = research_service_instance.analyze_industry(
+            industry=industry,
+            focus_areas=focus_areas if focus_areas else None,
+            recency=recency_map.get(recency, SearchRecency.MONTH)
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "analysis": result
+            })
+        else:
+            return jsonify({"error": "Failed to analyze industry"}), 500
+            
+    except Exception as e:
+        logger.error(f"Industry analysis error: {e}")
+        return jsonify({"error": "Failed to analyze industry"}), 500
+
+# Competitive Analysis Endpoint
+@app.route('/api/perplexity/research/competitive', methods=['POST'])
+@jwt_required()
+def perplexity_competitive_analysis():
+    """Conduct competitive analysis between companies"""
+    try:
+        _, research_service_instance, _, _, _ = get_perplexity_services()
+        if not research_service_instance:
+            return jsonify({"error": "Perplexity research service not available"}), 503
+        
+        data = request.get_json()
+        primary_company = data.get('primary_company')
+        competitors = data.get('competitors', [])
+        
+        if not primary_company:
+            return jsonify({"error": "Primary company is required"}), 400
+        if not competitors:
+            return jsonify({"error": "At least one competitor is required"}), 400
+        
+        recency = data.get('recency', 'month')
+        recency_map = {
+            'hour': SearchRecency.HOUR,
+            'day': SearchRecency.DAY,
+            'week': SearchRecency.WEEK,
+            'month': SearchRecency.MONTH,
+            'year': SearchRecency.YEAR
+        }
+        
+        result = research_service_instance.competitive_analysis(
+            primary_company=primary_company,
+            competitors=competitors,
+            recency=recency_map.get(recency, SearchRecency.MONTH)
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "analysis": result
+            })
+        else:
+            return jsonify({"error": "Failed to conduct competitive analysis"}), 500
+            
+    except Exception as e:
+        logger.error(f"Competitive analysis error: {e}")
+        return jsonify({"error": "Failed to conduct competitive analysis"}), 500
+
+# Executive Research Endpoint
+@app.route('/api/perplexity/research/executive', methods=['POST'])
+@jwt_required()
+def perplexity_executive_research():
+    """Research an executive for opportunity analysis"""
+    try:
+        _, research_service_instance, _, _, _ = get_perplexity_services()
+        if not research_service_instance:
+            return jsonify({"error": "Perplexity research service not available"}), 503
+        
+        data = request.get_json()
+        executive_name = data.get('executive_name')
+        company_name = data.get('company_name')
+        opportunity_type = data.get('opportunity_type')
+        
+        if not all([executive_name, company_name, opportunity_type]):
+            return jsonify({"error": "Executive name, company name, and opportunity type are required"}), 400
+        
+        recency = data.get('recency', 'week')
+        recency_map = {
+            'hour': SearchRecency.HOUR,
+            'day': SearchRecency.DAY,
+            'week': SearchRecency.WEEK,
+            'month': SearchRecency.MONTH,
+            'year': SearchRecency.YEAR
+        }
+        
+        result = research_service_instance.research_executive_opportunity(
+            executive_name=executive_name,
+            company_name=company_name,
+            opportunity_type=opportunity_type,
+            recency=recency_map.get(recency, SearchRecency.WEEK)
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "research": result
+            })
+        else:
+            return jsonify({"error": "Failed to research executive"}), 500
+            
+    except Exception as e:
+        logger.error(f"Executive research error: {e}")
+        return jsonify({"error": "Failed to research executive"}), 500
+
+# Content Generation - Executive Summary
+@app.route('/api/perplexity/content/executive-summary', methods=['POST'])
+@jwt_required()
+def perplexity_generate_executive_summary():
+    """Generate executive summary from research data"""
+    try:
+        _, _, content_service_instance, _, _ = get_perplexity_services()
+        if not content_service_instance:
+            return jsonify({"error": "Perplexity content service not available"}), 503
+        
+        data = request.get_json()
+        research_data = data.get('research_data')
+        
+        if not research_data:
+            return jsonify({"error": "Research data is required"}), 400
+        
+        result = content_service_instance.generate_executive_summary(research_data)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "summary": result
+            })
+        else:
+            return jsonify({"error": "Failed to generate executive summary"}), 500
+            
+    except Exception as e:
+        logger.error(f"Executive summary generation error: {e}")
+        return jsonify({"error": "Failed to generate executive summary"}), 500
+
+# Content Generation - Market Report
+@app.route('/api/perplexity/content/market-report', methods=['POST'])
+@jwt_required()
+def perplexity_generate_market_report():
+    """Generate comprehensive market report"""
+    try:
+        _, _, content_service_instance, _, _ = get_perplexity_services()
+        if not content_service_instance:
+            return jsonify({"error": "Perplexity content service not available"}), 503
+        
+        data = request.get_json()
+        market_data = data.get('market_data')
+        
+        if not market_data:
+            return jsonify({"error": "Market data is required"}), 400
+        
+        result = content_service_instance.generate_market_report(market_data)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "report": result
+            })
+        else:
+            return jsonify({"error": "Failed to generate market report"}), 500
+            
+    except Exception as e:
+        logger.error(f"Market report generation error: {e}")
+        return jsonify({"error": "Failed to generate market report"}), 500
+
+# Content Generation - Opportunity Brief
+@app.route('/api/perplexity/content/opportunity-brief', methods=['POST'])
+@jwt_required()
+def perplexity_generate_opportunity_brief():
+    """Generate business opportunity brief"""
+    try:
+        _, _, content_service_instance, _, _ = get_perplexity_services()
+        if not content_service_instance:
+            return jsonify({"error": "Perplexity content service not available"}), 503
+        
+        data = request.get_json()
+        prospect_data = data.get('prospect_data')
+        
+        if not prospect_data:
+            return jsonify({"error": "Prospect data is required"}), 400
+        
+        result = content_service_instance.generate_opportunity_brief(prospect_data)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "brief": result
+            })
+        else:
+            return jsonify({"error": "Failed to generate opportunity brief"}), 500
+            
+    except Exception as e:
+        logger.error(f"Opportunity brief generation error: {e}")
+        return jsonify({"error": "Failed to generate opportunity brief"}), 500
+
+# Content Generation - Industry Insight
+@app.route('/api/perplexity/content/industry-insight', methods=['POST'])
+@jwt_required()
+def perplexity_generate_industry_insight():
+    """Generate thought leadership industry insight"""
+    try:
+        _, _, content_service_instance, _, _ = get_perplexity_services()
+        if not content_service_instance:
+            return jsonify({"error": "Perplexity content service not available"}), 503
+        
+        data = request.get_json()
+        industry_data = data.get('industry_data')
+        
+        if not industry_data:
+            return jsonify({"error": "Industry data is required"}), 400
+        
+        result = content_service_instance.generate_industry_insight(industry_data)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "insight": result
+            })
+        else:
+            return jsonify({"error": "Failed to generate industry insight"}), 500
+            
+    except Exception as e:
+        logger.error(f"Industry insight generation error: {e}")
+        return jsonify({"error": "Failed to generate industry insight"}), 500
+
+# Opportunity Analysis - Governance Opportunity
+@app.route('/api/perplexity/opportunity/governance', methods=['POST'])
+@jwt_required()
+def perplexity_analyze_governance_opportunity():
+    """Analyze company for governance/board director opportunity"""
+    try:
+        _, _, _, opportunity_analyzer_instance, _ = get_perplexity_services()
+        if not opportunity_analyzer_instance:
+            return jsonify({"error": "Perplexity opportunity analyzer not available"}), 503
+        
+        data = request.get_json()
+        company_name = data.get('company_name')
+        if not company_name:
+            return jsonify({"error": "Company name is required"}), 400
+        
+        company_domain = data.get('company_domain')
+        
+        result = opportunity_analyzer_instance.analyze_governance_opportunity(
+            company_name=company_name,
+            company_domain=company_domain
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "analysis": result
+            })
+        else:
+            return jsonify({"error": "Failed to analyze governance opportunity"}), 500
+            
+    except Exception as e:
+        logger.error(f"Governance opportunity analysis error: {e}")
+        return jsonify({"error": "Failed to analyze governance opportunity"}), 500
+
+# Opportunity Analysis - Speaking Opportunity
+@app.route('/api/perplexity/opportunity/speaking', methods=['POST'])
+@jwt_required()
+def perplexity_analyze_speaking_opportunity():
+    """Analyze speaking opportunity potential"""
+    try:
+        _, _, _, opportunity_analyzer_instance, _ = get_perplexity_services()
+        if not opportunity_analyzer_instance:
+            return jsonify({"error": "Perplexity opportunity analyzer not available"}), 503
+        
+        data = request.get_json()
+        event_context = data.get('event_context')
+        if not event_context:
+            return jsonify({"error": "Event context is required"}), 400
+        
+        target_audience = data.get('target_audience')
+        
+        result = opportunity_analyzer_instance.analyze_speaking_opportunity(
+            event_context=event_context,
+            target_audience=target_audience
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "analysis": result
+            })
+        else:
+            return jsonify({"error": "Failed to analyze speaking opportunity"}), 500
+            
+    except Exception as e:
+        logger.error(f"Speaking opportunity analysis error: {e}")
+        return jsonify({"error": "Failed to analyze speaking opportunity"}), 500
+
+# Opportunity Analysis - Market Entry
+@app.route('/api/perplexity/opportunity/market-entry', methods=['POST'])
+@jwt_required()
+def perplexity_analyze_market_entry():
+    """Analyze market entry opportunity"""
+    try:
+        _, _, _, opportunity_analyzer_instance, _ = get_perplexity_services()
+        if not opportunity_analyzer_instance:
+            return jsonify({"error": "Perplexity opportunity analyzer not available"}), 503
+        
+        data = request.get_json()
+        market_segment = data.get('market_segment')
+        if not market_segment:
+            return jsonify({"error": "Market segment is required"}), 400
+        
+        focus_areas = data.get('focus_areas', [])
+        
+        result = opportunity_analyzer_instance.analyze_market_entry_opportunity(
+            market_segment=market_segment,
+            focus_areas=focus_areas if focus_areas else None
+        )
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "analysis": result
+            })
+        else:
+            return jsonify({"error": "Failed to analyze market entry opportunity"}), 500
+            
+    except Exception as e:
+        logger.error(f"Market entry opportunity analysis error: {e}")
+        return jsonify({"error": "Failed to analyze market entry opportunity"}), 500
+
+# AI Scoring Integration - Enhanced Scoring
+@app.route('/api/perplexity/scoring/prospect', methods=['POST'])
+@jwt_required()
+def perplexity_enhanced_prospect_scoring():
+    """Enhanced AI-powered prospect scoring using Perplexity"""
+    try:
+        _, _, _, _, ai_scorer_instance = get_perplexity_services()
+        if not ai_scorer_instance:
+            return jsonify({"error": "AI scoring service not available"}), 503
+        
+        data = request.get_json()
+        prospect_data = data.get('prospect_data')
+        opportunity_type = data.get('opportunity_type', 'executive_position')
+        
+        if not prospect_data:
+            return jsonify({"error": "Prospect data is required"}), 400
+        
+        # Convert data to mock prospect object for scoring
+        # In a real implementation, you'd use the actual Apollo prospect object
+        class MockProspect:
+            def __init__(self, data):
+                self.id = data.get('id', 'unknown')
+                self.name = data.get('name', 'Unknown')
+                self.title = data.get('title', '')
+                self.company_name = data.get('company_name', '')
+                self.company_domain = data.get('company_domain', '')
+                self.email = data.get('email')
+                self.phone = data.get('phone')
+                self.linkedin_url = data.get('linkedin_url')
+                self.seniority = data.get('seniority', '')
+                self.match_score = data.get('match_score', 0.5)
+                self.raw_data = data.get('raw_data', {})
+        
+        mock_prospect = MockProspect(prospect_data)
+        
+        result = ai_scorer_instance.score_apollo_prospect(mock_prospect, opportunity_type)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "scoring": result
+            })
+        else:
+            return jsonify({"error": "Failed to score prospect"}), 500
+            
+    except Exception as e:
+        logger.error(f"Enhanced prospect scoring error: {e}")
+        return jsonify({"error": "Failed to score prospect"}), 500
+
+# System Status Endpoint
+@app.route('/api/perplexity/status', methods=['GET'])
+@jwt_required()
+def perplexity_system_status():
+    """Get Perplexity integration system status"""
+    try:
+        api_available = PERPLEXITY_API_KEY is not None
+        services_initialized = all([
+            create_perplexity_api is not None,
+            create_research_service is not None,
+            create_content_service is not None,
+            create_opportunity_analyzer is not None,
+            create_ai_scorer is not None
+        ])
+        
+        api, research, content, analyzer, scorer = get_perplexity_services()
+        services_working = all([api, research, content, analyzer, scorer]) if api_available else False
+        
+        return jsonify({
+            "api_key_configured": api_available,
+            "modules_imported": services_initialized,
+            "services_initialized": services_working,
+            "status": "operational" if (api_available and services_initialized and services_working) else "limited",
+            "available_endpoints": [
+                "/api/perplexity/query",
+                "/api/perplexity/research/market",
+                "/api/perplexity/research/company", 
+                "/api/perplexity/research/industry",
+                "/api/perplexity/research/competitive",
+                "/api/perplexity/research/executive",
+                "/api/perplexity/content/executive-summary",
+                "/api/perplexity/content/market-report",
+                "/api/perplexity/content/opportunity-brief",
+                "/api/perplexity/content/industry-insight",
+                "/api/perplexity/opportunity/governance",
+                "/api/perplexity/opportunity/speaking",
+                "/api/perplexity/opportunity/market-entry",
+                "/api/perplexity/scoring/prospect"
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"System status check error: {e}")
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
 
 # Milestone routes
 @app.route('/api/milestones', methods=['GET'])
@@ -4849,6 +5570,238 @@ def get_integration_status():
         }
     }
     return jsonify(integration_health)
+
+# Apollo.io Integration API Endpoints
+from apollo_integration import create_apollo_client, ApolloAPIError
+from prospect_import_service import create_prospect_import_service
+
+@app.route('/api/apollo/search/grc-executives', methods=['POST'])
+@jwt_required()
+def search_grc_executives():
+    """Search for GRC executives using Apollo"""
+    try:
+        data = request.get_json() or {}
+        locations = data.get('locations', [])
+        max_results = data.get('max_results', 25)
+        auto_import = data.get('auto_import', False)
+        min_match_score = data.get('min_match_score', 0.6)
+        
+        import_service = create_prospect_import_service()
+        if not import_service:
+            return jsonify({"error": "Apollo integration not configured"}), 500
+        
+        results = import_service.search_and_import_grc_executives(
+            locations=locations,
+            max_results=max_results,
+            auto_import=auto_import,
+            min_match_score=min_match_score
+        )
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        logger.error(f"GRC executives search error: {e}")
+        return jsonify({"error": "Failed to search GRC executives"}), 500
+
+@app.route('/api/apollo/search/board-directors', methods=['POST'])
+@jwt_required()
+def search_board_directors():
+    """Search for board directors using Apollo"""
+    try:
+        data = request.get_json() or {}
+        locations = data.get('locations', [])
+        max_results = data.get('max_results', 25)
+        auto_import = data.get('auto_import', False)
+        min_match_score = data.get('min_match_score', 0.7)
+        
+        import_service = create_prospect_import_service()
+        if not import_service:
+            return jsonify({"error": "Apollo integration not configured"}), 500
+        
+        results = import_service.search_and_import_board_directors(
+            locations=locations,
+            max_results=max_results,
+            auto_import=auto_import,
+            min_match_score=min_match_score
+        )
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        logger.error(f"Board directors search error: {e}")
+        return jsonify({"error": "Failed to search board directors"}), 500
+
+@app.route('/api/apollo/search/ai-governance-leaders', methods=['POST'])
+@jwt_required()
+def search_ai_governance_leaders():
+    """Search for AI governance leaders using Apollo"""
+    try:
+        data = request.get_json() or {}
+        locations = data.get('locations', [])
+        max_results = data.get('max_results', 25)
+        auto_import = data.get('auto_import', False)
+        min_match_score = data.get('min_match_score', 0.6)
+        
+        import_service = create_prospect_import_service()
+        if not import_service:
+            return jsonify({"error": "Apollo integration not configured"}), 500
+        
+        results = import_service.search_and_import_ai_governance_leaders(
+            locations=locations,
+            max_results=max_results,
+            auto_import=auto_import,
+            min_match_score=min_match_score
+        )
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        logger.error(f"AI governance leaders search error: {e}")
+        return jsonify({"error": "Failed to search AI governance leaders"}), 500
+
+@app.route('/api/apollo/enrich/opportunity/<int:opportunity_id>', methods=['POST'])
+@jwt_required()
+def enrich_opportunity_with_apollo(opportunity_id):
+    """Enrich an existing opportunity with Apollo data"""
+    try:
+        import_service = create_prospect_import_service()
+        if not import_service:
+            return jsonify({"error": "Apollo integration not configured"}), 500
+        
+        results = import_service.enrich_existing_opportunity(opportunity_id)
+        return jsonify(results)
+        
+    except Exception as e:
+        logger.error(f"Opportunity enrichment error: {e}")
+        return jsonify({"error": "Failed to enrich opportunity"}), 500
+
+@app.route('/api/apollo/statistics', methods=['GET'])
+@jwt_required()
+def get_apollo_import_statistics():
+    """Get Apollo import statistics"""
+    try:
+        days = request.args.get('days', 30, type=int)
+        
+        import_service = create_prospect_import_service()
+        if not import_service:
+            return jsonify({"error": "Apollo integration not configured"}), 500
+        
+        stats = import_service.get_import_statistics(days=days)
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Apollo statistics error: {e}")
+        return jsonify({"error": "Failed to get Apollo statistics"}), 500
+
+@app.route('/api/apollo/status', methods=['GET'])
+@jwt_required()
+def get_apollo_integration_status():
+    """Check Apollo integration status and API key validation"""
+    try:
+        apollo_client = create_apollo_client()
+        if not apollo_client:
+            return jsonify({
+                "status": "error",
+                "message": "Apollo API key not configured",
+                "api_key_valid": False,
+                "integration_ready": False
+            })
+        
+        # Test API connection
+        api_key_valid = apollo_client.validate_api_key()
+        
+        status_data = {
+            "status": "healthy" if api_key_valid else "error",
+            "message": "Apollo integration ready" if api_key_valid else "Apollo API key invalid",
+            "api_key_valid": api_key_valid,
+            "integration_ready": api_key_valid,
+            "supported_searches": [
+                "grc_executives",
+                "board_directors", 
+                "ai_governance_leaders"
+            ],
+            "features": [
+                "prospect_search",
+                "data_enrichment",
+                "automated_import",
+                "opportunity_enhancement"
+            ]
+        }
+        
+        return jsonify(status_data)
+        
+    except Exception as e:
+        logger.error(f"Apollo status check error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "api_key_valid": False,
+            "integration_ready": False
+        }), 500
+
+@app.route('/api/apollo/bulk-import', methods=['POST'])
+@jwt_required()
+def bulk_import_prospects():
+    """Bulk import prospects for multiple search types"""
+    try:
+        data = request.get_json() or {}
+        locations = data.get('locations', [])
+        search_types = data.get('search_types', ['grc_executives', 'board_directors'])
+        max_results_per_type = data.get('max_results_per_type', 25)
+        min_match_score = data.get('min_match_score', 0.6)
+        
+        import_service = create_prospect_import_service()
+        if not import_service:
+            return jsonify({"error": "Apollo integration not configured"}), 500
+        
+        results = {
+            "bulk_import_started": True,
+            "search_types": search_types,
+            "locations": locations,
+            "results": {}
+        }
+        
+        total_imported = 0
+        
+        # Execute searches for each type
+        if 'grc_executives' in search_types:
+            grc_results = import_service.search_and_import_grc_executives(
+                locations=locations,
+                max_results=max_results_per_type,
+                auto_import=True,
+                min_match_score=min_match_score
+            )
+            results["results"]["grc_executives"] = grc_results
+            total_imported += grc_results.get('imported_count', 0)
+        
+        if 'board_directors' in search_types:
+            board_results = import_service.search_and_import_board_directors(
+                locations=locations,
+                max_results=max_results_per_type,
+                auto_import=True,
+                min_match_score=min_match_score
+            )
+            results["results"]["board_directors"] = board_results
+            total_imported += board_results.get('imported_count', 0)
+        
+        if 'ai_governance_leaders' in search_types:
+            ai_results = import_service.search_and_import_ai_governance_leaders(
+                locations=locations,
+                max_results=max_results_per_type,
+                auto_import=True,
+                min_match_score=min_match_score
+            )
+            results["results"]["ai_governance_leaders"] = ai_results
+            total_imported += ai_results.get('imported_count', 0)
+        
+        results["total_imported"] = total_imported
+        results["success"] = True
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        logger.error(f"Bulk import error: {e}")
+        return jsonify({"error": "Failed to execute bulk import"}), 500
 
 # $50M+ Empire Projections
 @app.route('/api/empire/projections', methods=['GET'])
@@ -6871,6 +7824,757 @@ def test_webhook(webhook_id):
     except Exception as e:
         logger.error(f"Test webhook error: {e}")
         return jsonify({"error": "Failed to test webhook"}), 500
+
+# ============================
+# AIRTABLE CRM INTEGRATION API
+# ============================
+
+# Airtable Sync Management
+@app.route('/api/airtable/status', methods=['GET'])
+@jwt_required()
+def get_airtable_status():
+    """Get Airtable integration status and configuration"""
+    try:
+        if not create_airtable_client:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        # Check API key validity
+        try:
+            client = create_airtable_client()
+            bases = client.list_bases()
+            api_valid = True
+        except Exception as e:
+            api_valid = False
+            bases = []
+        
+        # Get scheduler status
+        scheduler_status = {}
+        if get_scheduler:
+            try:
+                scheduler = get_scheduler()
+                scheduler_status = scheduler.get_job_status()
+            except Exception as e:
+                scheduler_status = {"error": str(e)}
+        
+        return jsonify({
+            "api_key_valid": api_valid,
+            "available_bases": len(bases),
+            "bases": bases[:5],  # First 5 bases for preview
+            "scheduler": scheduler_status.get('scheduler_running', False),
+            "total_jobs": scheduler_status.get('total_jobs', 0),
+            "enabled_jobs": scheduler_status.get('enabled_jobs', 0)
+        })
+        
+    except Exception as e:
+        logger.error(f"Airtable status error: {e}")
+        return jsonify({"error": "Failed to get Airtable status"}), 500
+
+@app.route('/api/airtable/bases', methods=['GET'])
+@jwt_required()
+def list_airtable_bases():
+    """List all accessible Airtable bases"""
+    try:
+        if not create_airtable_client:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        client = create_airtable_client()
+        bases = client.list_bases()
+        
+        return jsonify({
+            "bases": bases,
+            "total": len(bases)
+        })
+        
+    except Exception as e:
+        logger.error(f"List Airtable bases error: {e}")
+        return jsonify({"error": "Failed to list Airtable bases"}), 500
+
+@app.route('/api/airtable/bases/<string:base_id>/schema', methods=['GET'])
+@jwt_required()
+def get_base_schema(base_id):
+    """Get schema for a specific Airtable base"""
+    try:
+        if not create_airtable_client:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        client = create_airtable_client()
+        schema = client.get_base_schema(base_id)
+        
+        return jsonify(schema)
+        
+    except Exception as e:
+        logger.error(f"Get base schema error: {e}")
+        return jsonify({"error": "Failed to get base schema"}), 500
+
+@app.route('/api/airtable/bases/<string:base_id>/validate', methods=['POST'])
+@jwt_required()
+def validate_base_configuration(base_id):
+    """Validate base configuration for CRM sync"""
+    try:
+        if not create_base_manager:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        manager = create_base_manager()
+        validation = manager.validate_base_configuration(base_id)
+        
+        return jsonify(validation)
+        
+    except Exception as e:
+        logger.error(f"Base validation error: {e}")
+        return jsonify({"error": "Failed to validate base configuration"}), 500
+
+@app.route('/api/airtable/bases/<string:base_id>/setup', methods=['POST'])
+@jwt_required()
+def setup_base_configuration(base_id):
+    """Setup base for CRM synchronization"""
+    try:
+        if not create_base_manager:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        manager = create_base_manager()
+        setup_result = manager.setup_existing_base(base_id)
+        
+        return jsonify(setup_result)
+        
+    except Exception as e:
+        logger.error(f"Base setup error: {e}")
+        return jsonify({"error": "Failed to setup base configuration"}), 500
+
+# Sync Operations
+@app.route('/api/airtable/sync/table/<string:table_name>', methods=['POST'])
+@jwt_required()
+def sync_table(table_name):
+    """Sync a specific table to/from Airtable"""
+    try:
+        if not create_sync_service:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        data = request.get_json() or {}
+        base_id = data.get('base_id')
+        direction = data.get('direction', 'bidirectional')
+        
+        if not base_id:
+            return jsonify({"error": "base_id is required"}), 400
+        
+        # Create sync configuration
+        sync_config = SyncConfiguration(
+            enabled_tables=[table_name],
+            sync_direction=SyncDirection(direction),
+            conflict_strategy=ConflictStrategy(data.get('conflict_strategy', 'timestamp_based')),
+            batch_size=data.get('batch_size', 10)
+        )
+        
+        sync_service = create_sync_service(base_id, sync_config)
+        
+        if direction == 'to_airtable':
+            results = sync_service.sync_table_to_airtable(table_name)
+        elif direction == 'from_airtable':
+            results = sync_service.sync_table_from_airtable(table_name)
+        else:  # bidirectional
+            results = sync_service.sync_bidirectional(table_name)
+        
+        return jsonify({
+            "table": table_name,
+            "direction": direction,
+            "results": [result.__dict__ for result in results] if isinstance(results, list) else results
+        })
+        
+    except Exception as e:
+        logger.error(f"Table sync error: {e}")
+        return jsonify({"error": "Failed to sync table"}), 500
+
+@app.route('/api/airtable/sync/full', methods=['POST'])
+@jwt_required()
+def sync_all_tables():
+    """Perform full synchronization of all enabled tables"""
+    try:
+        if not create_sync_service:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        data = request.get_json() or {}
+        base_id = data.get('base_id')
+        
+        if not base_id:
+            return jsonify({"error": "base_id is required"}), 400
+        
+        # Create sync configuration
+        enabled_tables = data.get('enabled_tables', [
+            'revenue_streams', 'ai_agents', 'executive_opportunities',
+            'healthcare_providers', 'healthcare_appointments', 'retreat_events'
+        ])
+        
+        sync_config = SyncConfiguration(
+            enabled_tables=enabled_tables,
+            sync_direction=SyncDirection(data.get('direction', 'bidirectional')),
+            conflict_strategy=ConflictStrategy(data.get('conflict_strategy', 'timestamp_based')),
+            batch_size=data.get('batch_size', 15)
+        )
+        
+        sync_service = create_sync_service(base_id, sync_config)
+        summary = sync_service.sync_all_tables()
+        
+        return jsonify(summary)
+        
+    except Exception as e:
+        logger.error(f"Full sync error: {e}")
+        return jsonify({"error": "Failed to perform full sync"}), 500
+
+# Sync Jobs Management
+@app.route('/api/airtable/jobs', methods=['GET'])
+@jwt_required()
+def get_sync_jobs():
+    """Get all sync jobs"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        scheduler = get_scheduler()
+        status = scheduler.get_job_status()
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Get sync jobs error: {e}")
+        return jsonify({"error": "Failed to get sync jobs"}), 500
+
+@app.route('/api/airtable/jobs/<string:job_id>', methods=['GET'])
+@jwt_required()
+def get_sync_job(job_id):
+    """Get specific sync job details"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        scheduler = get_scheduler()
+        job_status = scheduler.get_job_status(job_id)
+        
+        return jsonify(job_status)
+        
+    except Exception as e:
+        logger.error(f"Get sync job error: {e}")
+        return jsonify({"error": "Failed to get sync job"}), 500
+
+@app.route('/api/airtable/jobs', methods=['POST'])
+@jwt_required()
+def create_sync_job():
+    """Create a new sync job"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        from airtable_sync_scheduler import SyncJob
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['id', 'name', 'base_id', 'tables', 'schedule_type', 'schedule_config']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+        
+        # Create sync configuration
+        sync_config_data = data.get('sync_config', {})
+        sync_config = SyncConfiguration(
+            enabled_tables=sync_config_data.get('enabled_tables', data['tables']),
+            sync_direction=SyncDirection(sync_config_data.get('sync_direction', 'bidirectional')),
+            conflict_strategy=ConflictStrategy(sync_config_data.get('conflict_strategy', 'timestamp_based')),
+            batch_size=sync_config_data.get('batch_size', 10)
+        )
+        
+        # Create sync job
+        job = SyncJob(
+            id=data['id'],
+            name=data['name'],
+            description=data.get('description', ''),
+            base_id=data['base_id'],
+            tables=data['tables'],
+            schedule_type=data['schedule_type'],
+            schedule_config=data['schedule_config'],
+            sync_config=sync_config,
+            enabled=data.get('enabled', True)
+        )
+        
+        scheduler = get_scheduler()
+        success = scheduler.add_sync_job(job)
+        
+        if success:
+            return jsonify({"message": "Sync job created successfully", "job_id": job.id}), 201
+        else:
+            return jsonify({"error": "Failed to create sync job"}), 400
+        
+    except Exception as e:
+        logger.error(f"Create sync job error: {e}")
+        return jsonify({"error": "Failed to create sync job"}), 500
+
+@app.route('/api/airtable/jobs/<string:job_id>', methods=['PUT'])
+@jwt_required()
+def update_sync_job(job_id):
+    """Update an existing sync job"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        data = request.get_json()
+        scheduler = get_scheduler()
+        
+        success = scheduler.update_job(job_id, data)
+        
+        if success:
+            return jsonify({"message": "Sync job updated successfully"})
+        else:
+            return jsonify({"error": "Failed to update sync job"}), 400
+        
+    except Exception as e:
+        logger.error(f"Update sync job error: {e}")
+        return jsonify({"error": "Failed to update sync job"}), 500
+
+@app.route('/api/airtable/jobs/<string:job_id>', methods=['DELETE'])
+@jwt_required()
+def delete_sync_job(job_id):
+    """Delete a sync job"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        scheduler = get_scheduler()
+        success = scheduler.remove_job(job_id)
+        
+        if success:
+            return jsonify({"message": "Sync job deleted successfully"})
+        else:
+            return jsonify({"error": "Job not found"}), 404
+        
+    except Exception as e:
+        logger.error(f"Delete sync job error: {e}")
+        return jsonify({"error": "Failed to delete sync job"}), 500
+
+@app.route('/api/airtable/jobs/<string:job_id>/execute', methods=['POST'])
+@jwt_required()
+def execute_sync_job(job_id):
+    """Execute a sync job immediately"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        scheduler = get_scheduler()
+        
+        # Execute the job immediately
+        scheduler._execute_job(job_id)
+        
+        return jsonify({"message": f"Sync job {job_id} executed successfully"})
+        
+    except Exception as e:
+        logger.error(f"Execute sync job error: {e}")
+        return jsonify({"error": "Failed to execute sync job"}), 500
+
+# Scheduler Control
+@app.route('/api/airtable/scheduler/start', methods=['POST'])
+@jwt_required()
+def start_sync_scheduler():
+    """Start the sync scheduler"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        scheduler = get_scheduler()
+        scheduler.start_scheduler()
+        
+        return jsonify({"message": "Sync scheduler started successfully"})
+        
+    except Exception as e:
+        logger.error(f"Start scheduler error: {e}")
+        return jsonify({"error": "Failed to start sync scheduler"}), 500
+
+@app.route('/api/airtable/scheduler/stop', methods=['POST'])
+@jwt_required()
+def stop_sync_scheduler():
+    """Stop the sync scheduler"""
+    try:
+        if not get_scheduler:
+            return jsonify({"error": "Airtable scheduler not available"}), 503
+        
+        scheduler = get_scheduler()
+        scheduler.stop_scheduler()
+        
+        return jsonify({"message": "Sync scheduler stopped successfully"})
+        
+    except Exception as e:
+        logger.error(f"Stop scheduler error: {e}")
+        return jsonify({"error": "Failed to stop sync scheduler"}), 500
+
+# Conflict Resolution
+@app.route('/api/airtable/conflicts', methods=['GET'])
+@jwt_required()
+def get_sync_conflicts():
+    """Get unresolved sync conflicts"""
+    try:
+        if not create_sync_service:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        # Get conflicts from all sync services
+        # This would need to be tracked globally in a production system
+        conflicts = []
+        
+        return jsonify({
+            "conflicts": conflicts,
+            "total": len(conflicts)
+        })
+        
+    except Exception as e:
+        logger.error(f"Get sync conflicts error: {e}")
+        return jsonify({"error": "Failed to get sync conflicts"}), 500
+
+# Base Management Templates
+@app.route('/api/airtable/schema/template', methods=['GET'])
+@jwt_required()
+def get_crm_schema_template():
+    """Get the CRM schema template for manual base setup"""
+    try:
+        if not create_base_manager:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        manager = create_base_manager()
+        template = manager.create_base_from_template()
+        
+        return jsonify(template)
+        
+    except Exception as e:
+        logger.error(f"Get schema template error: {e}")
+        return jsonify({"error": "Failed to get schema template"}), 500
+
+@app.route('/api/airtable/schema/instructions', methods=['GET'])
+@jwt_required()
+def get_setup_instructions():
+    """Get detailed setup instructions for manual base configuration"""
+    try:
+        if not create_base_manager:
+            return jsonify({"error": "Airtable integration not available"}), 503
+        
+        manager = create_base_manager()
+        instructions = manager.get_setup_instructions()
+        
+        return jsonify(instructions)
+        
+    except Exception as e:
+        logger.error(f"Get setup instructions error: {e}")
+        return jsonify({"error": "Failed to get setup instructions"}), 500
+
+# Data Export/Import
+@app.route('/api/airtable/export/<string:table_name>', methods=['GET'])
+@jwt_required()
+def export_table_data(table_name):
+    """Export table data for backup or analysis"""
+    try:
+        # Get the model class
+        model_mapping = {
+            'revenue_streams': RevenueStream,
+            'ai_agents': AIAgent,
+            'executive_opportunities': ExecutiveOpportunity,
+            'healthcare_providers': HealthcareProvider,
+            'healthcare_appointments': HealthcareAppointment,
+            'retreat_events': RetreatEvent,
+            'kpi_metrics': KPIMetric,
+            'milestones': Milestone
+        }
+        
+        if table_name not in model_mapping:
+            return jsonify({"error": "Invalid table name"}), 400
+        
+        model = model_mapping[table_name]
+        records = model.query.all()
+        
+        # Convert to dictionaries
+        data = []
+        for record in records:
+            if hasattr(record, 'to_dict'):
+                data.append(record.to_dict())
+            else:
+                record_dict = {}
+                for column in record.__table__.columns:
+                    value = getattr(record, column.name)
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
+                    record_dict[column.name] = value
+                data.append(record_dict)
+        
+        return jsonify({
+            "table": table_name,
+            "total_records": len(data),
+            "exported_at": datetime.utcnow().isoformat(),
+            "data": data
+        })
+        
+    except Exception as e:
+        logger.error(f"Export table data error: {e}")
+        return jsonify({"error": "Failed to export table data"}), 500
+
+# Sync Statistics and Monitoring
+@app.route('/api/airtable/stats', methods=['GET'])
+@jwt_required()
+def get_sync_statistics():
+    """Get comprehensive sync statistics"""
+    try:
+        stats = {
+            "airtable_integration": {
+                "enabled": create_airtable_client is not None,
+                "api_key_configured": bool(AIRTABLE_API_KEY)
+            },
+            "scheduler": {
+                "available": get_scheduler is not None,
+                "running": False,
+                "total_jobs": 0,
+                "enabled_jobs": 0
+            },
+            "last_sync_times": {},
+            "sync_performance": {
+                "total_syncs": 0,
+                "successful_syncs": 0,
+                "failed_syncs": 0,
+                "average_sync_time": 0
+            }
+        }
+        
+        # Get scheduler stats if available
+        if get_scheduler:
+            try:
+                scheduler = get_scheduler()
+                scheduler_status = scheduler.get_job_status()
+                stats["scheduler"].update({
+                    "running": scheduler_status.get('scheduler_running', False),
+                    "total_jobs": scheduler_status.get('total_jobs', 0),
+                    "enabled_jobs": scheduler_status.get('enabled_jobs', 0)
+                })
+            except Exception as e:
+                logger.warning(f"Could not get scheduler stats: {e}")
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Get sync statistics error: {e}")
+        return jsonify({"error": "Failed to get sync statistics"}), 500
+
+# Real-time Webhooks and Event Streaming
+@app.route('/api/airtable/webhooks', methods=['POST'])
+def airtable_webhook():
+    """Receive webhooks from Airtable for real-time updates"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        webhook_data = request.get_json()
+        webhook_id = request.headers.get('X-Webhook-ID', 'unknown')
+        
+        # Get realtime handler and process webhook
+        handler = get_realtime_handler()
+        result = handler.handle_airtable_webhook(webhook_data, webhook_id)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Airtable webhook error: {e}")
+        return jsonify({"error": "Failed to process webhook"}), 500
+
+@app.route('/api/airtable/events', methods=['GET'])
+@jwt_required()
+def get_recent_events():
+    """Get recent real-time events"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        limit = int(request.args.get('limit', 50))
+        event_type = request.args.get('event_type')
+        table_name = request.args.get('table_name')
+        
+        handler = get_realtime_handler()
+        
+        # Convert event_type string to enum if provided
+        event_type_enum = None
+        if event_type:
+            try:
+                event_type_enum = EventType(event_type)
+            except ValueError:
+                return jsonify({"error": f"Invalid event type: {event_type}"}), 400
+        
+        events = handler.get_recent_events(limit, event_type_enum, table_name)
+        
+        # Convert events to dictionaries
+        event_dicts = []
+        for event in events:
+            event_dict = {
+                "event_id": event.event_id,
+                "event_type": event.event_type.value,
+                "source": event.source,
+                "table_name": event.table_name,
+                "record_id": event.record_id,
+                "data": event.data,
+                "timestamp": event.timestamp.isoformat(),
+                "base_id": event.base_id,
+                "processed": event.processed,
+                "retry_count": event.retry_count
+            }
+            event_dicts.append(event_dict)
+        
+        return jsonify({
+            "events": event_dicts,
+            "total": len(event_dicts),
+            "filters": {
+                "limit": limit,
+                "event_type": event_type,
+                "table_name": table_name
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get recent events error: {e}")
+        return jsonify({"error": "Failed to get recent events"}), 500
+
+@app.route('/api/airtable/events/stats', methods=['GET'])
+@jwt_required()
+def get_event_statistics():
+    """Get real-time event processing statistics"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        handler = get_realtime_handler()
+        stats = handler.get_event_statistics()
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Get event statistics error: {e}")
+        return jsonify({"error": "Failed to get event statistics"}), 500
+
+@app.route('/api/airtable/realtime/start', methods=['POST'])
+@jwt_required()
+def start_realtime_processing():
+    """Start real-time event processing"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        handler = get_realtime_handler()
+        handler.start_processing()
+        
+        return jsonify({"message": "Real-time processing started successfully"})
+        
+    except Exception as e:
+        logger.error(f"Start realtime processing error: {e}")
+        return jsonify({"error": "Failed to start real-time processing"}), 500
+
+@app.route('/api/airtable/realtime/stop', methods=['POST'])
+@jwt_required()
+def stop_realtime_processing():
+    """Stop real-time event processing"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        handler = get_realtime_handler()
+        handler.stop_processing()
+        
+        return jsonify({"message": "Real-time processing stopped successfully"})
+        
+    except Exception as e:
+        logger.error(f"Stop realtime processing error: {e}")
+        return jsonify({"error": "Failed to stop real-time processing"}), 500
+
+@app.route('/api/airtable/webhook/config', methods=['POST'])
+@jwt_required()
+def configure_webhook():
+    """Configure a webhook endpoint"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['id', 'name', 'base_id', 'webhook_url']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+        
+        # Create webhook config
+        webhook_config = WebhookConfig(
+            id=data['id'],
+            name=data['name'],
+            base_id=data['base_id'],
+            webhook_url=data['webhook_url'],
+            secret_key=data.get('secret_key'),
+            enabled=data.get('enabled', True),
+            event_types=data.get('event_types', ['record_created', 'record_updated', 'record_deleted'])
+        )
+        
+        handler = get_realtime_handler()
+        handler.configure_webhook(webhook_config)
+        
+        return jsonify({
+            "message": "Webhook configured successfully",
+            "webhook_id": webhook_config.id
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Configure webhook error: {e}")
+        return jsonify({"error": "Failed to configure webhook"}), 500
+
+@app.route('/api/airtable/webhook/config', methods=['GET'])
+@jwt_required()
+def list_webhook_configs():
+    """List all webhook configurations"""
+    try:
+        if not get_realtime_handler:
+            return jsonify({"error": "Real-time handler not available"}), 503
+        
+        handler = get_realtime_handler()
+        configs = handler.list_webhook_configs()
+        
+        # Convert to dictionaries
+        config_dicts = []
+        for config in configs:
+            config_dict = {
+                "id": config.id,
+                "name": config.name,
+                "base_id": config.base_id,
+                "webhook_url": config.webhook_url,
+                "enabled": config.enabled,
+                "event_types": config.event_types,
+                "created_at": config.created_at.isoformat()
+            }
+            config_dicts.append(config_dict)
+        
+        return jsonify({
+            "webhooks": config_dicts,
+            "total": len(config_dicts)
+        })
+        
+    except Exception as e:
+        logger.error(f"List webhook configs error: {e}")
+        return jsonify({"error": "Failed to list webhook configurations"}), 500
+
+# Initialize Airtable integration on startup
+def initialize_airtable_integration():
+    """Initialize Airtable integration components on startup"""
+    try:
+        # Start realtime processing if available
+        if get_realtime_handler:
+            handler = get_realtime_handler()
+            handler.start_processing()
+            logger.info("Airtable real-time processing started")
+        
+        # Start sync scheduler if available
+        if get_scheduler:
+            scheduler = get_scheduler()
+            scheduler.start_scheduler()
+            logger.info("Airtable sync scheduler started")
+            
+    except Exception as e:
+        logger.error(f"Error initializing Airtable integration: {e}")
+
+# Call initialization after app setup
+with app.app_context():
+    initialize_airtable_integration()
 
 # ============================
 # WORKFLOW MANAGEMENT API
@@ -9234,6 +10938,8 @@ def health_check():
 # Initialize database on startup
 with app.app_context():
     create_and_seed_database()
+    # Initialize Make.com bridges after database is ready
+    initialize_make_bridges()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
