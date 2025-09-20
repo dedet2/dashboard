@@ -171,7 +171,7 @@ class AirtableSyncScheduler:
             sync_config=SyncConfiguration(
                 enabled_tables=['executive_opportunities', 'ai_agents'],
                 sync_direction=SyncDirection.BIDIRECTIONAL,
-                conflict_strategy=ConflictStrategy.SMART_MERGE,
+                conflict_strategy=ConflictStrategy.MERGE_SMART,
                 batch_size=15
             )
         )
