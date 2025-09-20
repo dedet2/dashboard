@@ -5,7 +5,7 @@ integrations = ["python_database:1.0.0", "notion:1.0.0", "perplexity_v0:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["cairo", "ffmpeg-full", "freetype", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "libjpeg_turbo", "libpng", "pkg-config", "qhull", "tcl", "tk", "which"]
+packages = ["cairo", "ffmpeg-full", "freetype", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "libjpeg_turbo", "libpng", "pkg-config", "qhull", "tcl", "tk", "which", "jq"]
 
 [workflows]
 runButton = "Project"

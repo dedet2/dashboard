@@ -3131,15 +3131,18 @@ DASHBOARD_HTML = """
         async function loadDashboardData() {
             try {
                 console.log('API_BASE:', API_BASE);
-                const token = localStorage.getItem('authToken');
-                if (!token) {
+                authToken = localStorage.getItem('authToken');
+                if (!authToken) {
                     console.error('No auth token found, redirecting to login');
                     showWelcomeScreen();
                     return;
                 }
+                
+                // Set axios defaults for all authenticated requests
+                axios.defaults.headers.common['Authorization'] = 'Bearer ' + authToken;
                 console.log('Using token for API calls');
                 const headers = { 
-                    'Authorization': 'Bearer ' + token,
+                    'Authorization': 'Bearer ' + authToken,
                     'Content-Type': 'application/json'
                 };
                 
